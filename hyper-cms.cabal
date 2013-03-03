@@ -7,6 +7,12 @@ author:         jason
 executable hyper-cms
   hs-source-dirs:  src
   main-is:         Main.hs
-  build-depends:   base >= 4
+  build-depends:   
+                   base >= 4,
+                   bytestring,
+                   warp,
+                   http-types,
+                   wai
   ghc-options:     -Wall
+  extensions:      OverloadedStrings
 
