@@ -14,6 +14,7 @@ data CValue = CString String
             | CInt Integer
             | CDouble Double
             | CBool Bool
+            | CDefault
               deriving (Eq, Ord, Show)
                           
 data CEntry = CEntry String CValue deriving (Show)
@@ -43,11 +44,15 @@ p_value = value <* spaces
   where value = CString <$> p_string
             <|> p_int_or_float
             <|> CBool <$> p_bool
+            <|> p_default
             <?> "entry value"
 
 p_bool :: CharParser () Bool
 p_bool = True <$ string "true"
      <|> False <$ string "false"
+
+p_default :: CharParser () CValue
+p_default = CDefault <$ string "default"
      
 -- TODO: negative numbers not support, is this needed?
 p_int_or_float :: CharParser () CValue
