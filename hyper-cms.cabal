@@ -6,7 +6,7 @@ author:         jason
 
 executable hyper-cms
   hs-source-dirs:  src
-  main-is:         Main.hs
+  main-is:         Hyper/Hyper.hs
   build-depends:   
                    base >= 4,
                    bytestring,
