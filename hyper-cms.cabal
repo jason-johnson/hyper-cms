@@ -19,7 +19,9 @@ executable hyper-cms
   other-modules:   
                    Hyper.Config,
                    Hyper.Config.Database,
+                   Hyper.Config.File,
                    Hyper.Config.File.Parser,
+                   Hyper.Config.Types,
                    Hyper.Constants,
                    Hyper.Options
 
