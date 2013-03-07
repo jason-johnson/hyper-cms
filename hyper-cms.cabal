@@ -12,12 +12,14 @@ executable hyper-cms
                    bytestring,
                    warp,
                    http-types,
-                   wai
+                   wai,
+                   parsec
   ghc-options:     -Wall
   extensions:      OverloadedStrings
   other-modules:   
                    Hyper.Config,
                    Hyper.Config.Database,
+                   Hyper.Config.File.Parser,
                    Hyper.Constants,
                    Hyper.Options
 
