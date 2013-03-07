@@ -22,7 +22,7 @@ data CEntry = CEntry String CValue deriving (Show)
 data CSection = CSection String [CEntry] deriving (Show)
 
 p_configuration :: CharParser () [CSection]
-p_configuration = spaces *> many1 p_section
+p_configuration = comments *> spaces *> many1 p_section
             
 p_between :: Char -> CharParser () a -> Char -> CharParser () a
 p_between left parser right =
