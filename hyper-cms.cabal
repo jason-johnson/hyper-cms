@@ -17,6 +17,7 @@ executable hyper-cms
   extensions:      OverloadedStrings
   other-modules:   
                    Hyper.Config,
+                   Hyper.Config.Database,
                    Hyper.Constants,
                    Hyper.Options
 
