@@ -1,15 +1,19 @@
 module Hyper.Options
 (
-parse,
-Flag(..)
+  parse
 ) where
 
 import           Data.ByteString.Char8 (hPutStrLn, pack)
-import           Data.List             (nub)
 import           System.Console.GetOpt
 import           System.Exit           (ExitCode (ExitSuccess),
                                         ExitCode (ExitFailure), exitWith)
 import           System.IO             (stderr)
+
+import Paths_hyper_cms (version)
+import Data.Version (showVersion)
+
+import qualified Hyper.Constants as Const
+import Hyper.Config.Config
 
 data Flag
         = Config String
@@ -41,25 +45,36 @@ flags =
 
 -- TODO: This should be returning some config structure, not flags.  When the parse is finished it should be over
 
-parse :: [String] -> IO ([Flag], [String])
-parse argv = case getOpt Permute flags argv of
-    (args,ports,[]) -> do
-        handleArgs args $ if null ports then ["80"] else ports
+parse :: String -> [String] -> IO Configuration
+parse progName argv = case getOpt Permute flags argv of
+    (args,ports,[]) -> handleArgs args $ if null ports then [show Const.defaultHTTPPort] else ports
     (_,_,errs)      -> do
         hPutStrLn stderr (pack $ concat errs ++ usageInfo header flags)
         exitWith (ExitFailure 1)
-
     where
-        header = "Usage: hyper [-cdsmrvh] [port ...]"
+        header = "Usage: " ++ progName ++ " [-cdsmrvh] [port ...]"
         handleArgs args ports | Help `elem` args = do
-                                                        hPutStrLn stderr (pack $ usageInfo header flags)
+                                                        hPutStrLn stderr . pack $ usageInfo header flags
                                                         exitWith ExitSuccess
                               | Version `elem` args = do
-                                                        hPutStrLn stderr $ pack "Version: 01"
+                                                        hPutStrLn stderr . pack $ progName ++ ": " ++ showVersion version
                                                         exitWith ExitSuccess
-                              | otherwise = return (nub . correct $ args, ports)
-        correct args | DatabaseConfig `elem` args = filter noConfigFile args
-                     | otherwise = args
-        noConfigFile (Config _) = False
-        noConfigFile _ = True
-        
+                              | otherwise = return $ Configuration {
+                                                                          configurationStore = confStore args
+                                                                        , configurationSinglePort = length ports == 1
+                                                                        , configurationPorts = map read ports
+                                                                        , configurationSSlPort = setSSLPort args
+                                                                        , configurationMultiSite = MultiSite `elem` args
+                                                                        , configurationResourcePerReq = ResourcePerRequest `elem` args
+                                                                        }
+        confStore args  | DatabaseConfig `elem` args = Database
+                        | otherwise = ConfigFile $ setConfigFile args
+
+        setConfigFile [] = progName ++ ".config"
+        setConfigFile (Config file:_) = file
+        setConfigFile (_:args) = setConfigFile args
+
+        setSSLPort [] = Nothing
+        setSSLPort (SSL Nothing:_) = Just Const.defaultSSLPort
+        setSSLPort (SSL (Just port):_) = Just $ read port
+        setSSLPort (_:args) = setSSLPort args
