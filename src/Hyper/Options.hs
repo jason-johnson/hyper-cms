@@ -66,6 +66,7 @@ parse progName argv = case getOpt Permute flags argv of
                                                                         , configurationSSlPort = setSSLPort args
                                                                         , configurationMultiSite = MultiSite `elem` args
                                                                         , configurationResourcePerReq = ResourcePerRequest `elem` args
+                                                                        , configurationSites = []
                                                                         }
         confStore args  | DatabaseConfig `elem` args = Database
                         | otherwise = ConfigFile $ setConfigFile args
