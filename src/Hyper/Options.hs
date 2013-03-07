@@ -42,18 +42,18 @@ flags =
 
 parse :: [String] -> IO ([Flag], [String])
 parse argv = case getOpt Permute flags argv of
-    (args,ps,[]) -> do
-        let ports = if null ps then ["80"] else ps
-        if Help `elem` args     -- TODO: Clean this nested if statement up
-            then do hPutStrLn stderr (pack $ usageInfo header flags)
-                    exitWith ExitSuccess
-            else if Version `elem` args
-                then do hPutStrLn stderr $ pack "Version: 01"
-                        exitWith ExitSuccess
-                else return (nub args, ports)
+    (args,ports,[]) -> do
+        handleArgs args $ if null ports then ["80"] else ports
     (_,_,errs)      -> do
         hPutStrLn stderr (pack $ concat errs ++ usageInfo header flags)
         exitWith (ExitFailure 1)
- 
+
     where
         header = "Usage: hyper [-cdsmrvh] [port ...]"
+        handleArgs args ports | Help `elem` args = do
+                                                        hPutStrLn stderr (pack $ usageInfo header flags)
+                                                        exitWith ExitSuccess
+                              | Version `elem` args = do
+                                                        hPutStrLn stderr $ pack "Version: 01"
+                                                        exitWith ExitSuccess
+                              | otherwise = return (nub args, ports)
