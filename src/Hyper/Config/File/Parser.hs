@@ -59,10 +59,10 @@ p_default = CDefault <$ string "default"
      
 -- TODO: negative numbers not support, is this needed?
 p_int_or_float :: CharParser () CValue
-p_int_or_float = p <$> naturalOrFloat
+p_int_or_float = pick <$> naturalOrFloat
     where
-        p (Right x)    = CDouble x
-        p (Left x)     = CInt x
+        pick (Left x)     = CInt x
+        pick (Right x)    = CDouble x
         naturalOrFloat = P.naturalOrFloat lexer
         lexer          = P.makeTokenParser emptyDef
 
