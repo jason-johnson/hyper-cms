@@ -15,5 +15,7 @@ executable hyper-cms
                    wai
   ghc-options:     -Wall
   extensions:      OverloadedStrings
-  other-modules:   Hyper.Options
+  other-modules:   
+                   Hyper.Config.Config,
+                   Hyper.Options
 
