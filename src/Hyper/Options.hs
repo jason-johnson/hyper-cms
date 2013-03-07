@@ -4,11 +4,12 @@ parse,
 Flag(..)
 ) where
 
-import System.Console.GetOpt
-import System.IO (stderr)
-import Data.ByteString.Char8 (hPutStrLn, pack)
-import System.Exit (exitWith, ExitCode(ExitSuccess), ExitCode(ExitFailure))
-import Data.List (nub)
+import           Data.ByteString.Char8 (hPutStrLn, pack)
+import           Data.List             (nub)
+import           System.Console.GetOpt
+import           System.Exit           (ExitCode (ExitSuccess),
+                                        ExitCode (ExitFailure), exitWith)
+import           System.IO             (stderr)
 
 data Flag
         = Config String
@@ -19,7 +20,7 @@ data Flag
         | Version
         | Help
         deriving (Eq,Ord,Show)
-        
+
 flags :: [OptDescr Flag]
 flags =
    [Option ['c'] ["config"]     (ReqArg Config "FILE")
