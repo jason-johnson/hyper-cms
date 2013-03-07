@@ -13,7 +13,7 @@ import Paths_hyper_cms (version)
 import Data.Version (showVersion)
 
 import qualified Hyper.Constants as Const
-import Hyper.Config.Config
+import Hyper.Config
 
 data Flag
         = Config String

@@ -16,7 +16,7 @@ executable hyper-cms
   ghc-options:     -Wall
   extensions:      OverloadedStrings
   other-modules:   
-                   Hyper.Config.Config,
+                   Hyper.Config,
                    Hyper.Constants,
                    Hyper.Options
 
