@@ -33,7 +33,7 @@ p_section = CSection <$> p_between '[' (many1 ch) ']' <*> (spaces *> p_entries) 
         where ch = satisfy (`notElem` "]\"\\")
 
 p_entries :: CharParser () [CEntry]
-p_entries = many (optional p_comment *> entry) <?> "entries"
+p_entries = many (comments *> entry) <?> "entries"
         where
                 entry = CEntry <$> fieldName <*> (spaces *> char '=' *> spaces *> p_value)
                 fieldName = (:) <$> letter <*> many fieldChar
@@ -41,6 +41,9 @@ p_entries = many (optional p_comment *> entry) <?> "entries"
 
 p_comment :: CharParser () ()                
 p_comment = spaces *> char '#' *> manyTill anyChar newline *> spaces *> pure ()
+
+comments :: CharParser () [()]
+comments = many p_comment
     
 p_value :: CharParser () CValue
 p_value = value <* spaces
