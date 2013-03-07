@@ -57,4 +57,9 @@ parse argv = case getOpt Permute flags argv of
                               | Version `elem` args = do
                                                         hPutStrLn stderr $ pack "Version: 01"
                                                         exitWith ExitSuccess
-                              | otherwise = return (nub args, ports)
+                              | otherwise = return (nub . correct $ args, ports)
+        correct args | DatabaseConfig `elem` args = filter noConfigFile args
+                     | otherwise = args
+        noConfigFile (Config _) = False
+        noConfigFile _ = True
+        
