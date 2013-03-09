@@ -3,6 +3,7 @@ module Hyper.Config
   loadConfiguration
 , ConfigurationStore(..)
 , Configuration(..)
+, SiteConfiguration(..)
 )
 where
 
