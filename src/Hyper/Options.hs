@@ -67,7 +67,7 @@ parse progName argv = case getOpt Permute flags argv of
                                                                         , configurationSSlPort = setSSLPort args
                                                                         , configurationMultiSite = MultiSite `elem` args
                                                                         , configurationResourcePerReq = ResourcePerRequest `elem` args
-                                                                        , configurationDefaultSite = SiteConfiguration { root = "" }
+                                                                        , configurationDefaultSite = SiteConfiguration { root = "", index = "index.html", passthrough = [ "html", "css", "js" ], cacheDirectory = "/cache" }
                                                                         , configurationSites = M.empty
                                                                         }
         confStore args  | DatabaseConfig `elem` args = Database

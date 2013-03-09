@@ -9,7 +9,10 @@ where
 import Data.Map (Map)
 
 data SiteConfiguration = SiteConfiguration {
-          root                            :: FilePath           -- TODO: Routing also goes in here, cache directory and so on
+          root                          :: FilePath           -- TODO: For now we'll simply do file routing but we might let clients override this later
+        , index                         :: FilePath
+        , passthrough                   :: [String]
+        , cacheDirectory                :: FilePath
 }
           deriving (Show)
 
