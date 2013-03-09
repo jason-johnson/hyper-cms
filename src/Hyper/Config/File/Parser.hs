@@ -14,6 +14,7 @@ data CValue = CString String
             | CInt Integer
             | CDouble Double
             | CBool Bool
+            | CList [CValue]
             | CDefault
               deriving (Eq, Ord, Show)
                           
@@ -50,12 +51,16 @@ p_value = value <* spaces
   where value = CString <$> p_string
             <|> p_int_or_float
             <|> CBool <$> p_bool
+            <|> CList <$> p_list
             <|> p_default
             <?> "entry value"
 
 p_bool :: CharParser () Bool
 p_bool = True <$ string "true"
      <|> False <$ string "false"
+
+p_list :: CharParser () [CValue]
+p_list = between (char '{' <* spaces) (char '}') $ (p_value <* spaces) `sepBy` (char ',' <* spaces)
 
 p_default :: CharParser () CValue
 p_default = CDefault <$ string "default"
