@@ -6,6 +6,8 @@ module Hyper.Config.Types
 )
 where
 
+import Data.Map (Map)
+
 data SiteConfiguration = SiteConfiguration {
           root                            :: FilePath           -- TODO: Routing also goes in here, cache directory and so on
 }
@@ -22,6 +24,6 @@ data Configuration = Configuration {
         , configurationMultiSite        :: Bool
         , configurationResourcePerReq   :: Bool
         , configurationDefaultSite      :: SiteConfiguration
-        , configurationSites            :: [(String, SiteConfiguration)]        -- TODO: This should be using some kind of Host name that Yesod uses.  Also we should probably be using a map here (then again maybe not since this layout is easier in the case of a single site)
+        , configurationSites            :: Map String SiteConfiguration -- TODO: The key should be using some kind of Host name that Yesod uses.
 }
         deriving (Show)

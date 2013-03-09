@@ -13,7 +13,8 @@ executable hyper-cms
                    warp,
                    http-types,
                    wai,
-                   parsec
+                   parsec,
+                   containers
   ghc-options:     -Wall
   extensions:      OverloadedStrings
   other-modules:   

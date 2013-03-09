@@ -3,6 +3,7 @@ module Hyper.Options
   parse
 ) where
 
+import qualified Data.Map as M
 import           Data.ByteString.Char8 (hPutStrLn, pack)
 import           System.Console.GetOpt
 import           System.Exit           (ExitCode (ExitSuccess),
@@ -67,7 +68,7 @@ parse progName argv = case getOpt Permute flags argv of
                                                                         , configurationMultiSite = MultiSite `elem` args
                                                                         , configurationResourcePerReq = ResourcePerRequest `elem` args
                                                                         , configurationDefaultSite = SiteConfiguration { root = "" }
-                                                                        , configurationSites = []
+                                                                        , configurationSites = M.empty
                                                                         }
         confStore args  | DatabaseConfig `elem` args = Database
                         | otherwise = ConfigFile $ setConfigFile args
