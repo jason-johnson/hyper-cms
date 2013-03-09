@@ -3,18 +3,18 @@ module Hyper.Options
   parse
 ) where
 
-import qualified Data.Map as M
 import           Data.ByteString.Char8 (hPutStrLn, pack)
+import qualified Data.Map              as M
 import           System.Console.GetOpt
 import           System.Exit           (ExitCode (ExitSuccess),
                                         ExitCode (ExitFailure), exitWith)
 import           System.IO             (stderr)
 
-import Paths_hyper_cms (version)
-import Data.Version (showVersion)
+import           Data.Version          (showVersion)
+import           Paths_hyper_cms       (version)
 
-import qualified Hyper.Constants as Const
-import Hyper.Config
+import           Hyper.Config
+import qualified Hyper.Constants       as Const
 
 data Flag
         = Config String
@@ -67,7 +67,11 @@ parse progName argv = case getOpt Permute flags argv of
                                                                         , configurationSSlPort = setSSLPort args
                                                                         , configurationMultiSite = MultiSite `elem` args
                                                                         , configurationResourcePerReq = ResourcePerRequest `elem` args
-                                                                        , configurationDefaultSite = SiteConfiguration { root = "", index = "index.html", passthrough = [ "html", "css", "js" ], cacheDirectory = "/cache" }
+                                                                        , configurationDefaultSite = SiteConfiguration {
+                                                                                                          root = ""
+                                                                                                        , index = "index.html"
+                                                                                                        , passthrough = [ "html", "css", "js" ]
+                                                                                                        , cacheDirectory = "/cache" }
                                                                         , configurationSites = M.empty
                                                                         }
         confStore args  | DatabaseConfig `elem` args = Database

@@ -7,11 +7,11 @@ module Hyper.Config
 )
 where
 
-import Hyper.Config.Types
+import           Hyper.Config.Types
 
 import qualified Hyper.Config.Database as DB
-import qualified Hyper.Config.File as F
-        
+import qualified Hyper.Config.File     as F
+
 loadConfiguration :: Configuration -> IO Configuration
 loadConfiguration config = loadConfigStore $ configurationStore config
         where

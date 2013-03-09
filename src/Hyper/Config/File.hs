@@ -4,8 +4,8 @@ module Hyper.Config.File
 )
 where
 
-import Hyper.Config.Types
-import Hyper.Config.File.Parser
+import           Hyper.Config.File.Parser
+import           Hyper.Config.Types
 
 
 loadConfiguration :: FilePath -> Configuration -> IO Configuration

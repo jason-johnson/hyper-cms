@@ -1,8 +1,8 @@
 module Main where
 
-import Hyper.Options
-import Hyper.Config (loadConfiguration)
-import System.Environment (getArgs, getProgName)
+import           Hyper.Config       (loadConfiguration)
+import           Hyper.Options
+import           System.Environment (getArgs, getProgName)
 
 main :: IO ()
 main = do

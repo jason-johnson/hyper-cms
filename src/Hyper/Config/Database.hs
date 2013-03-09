@@ -4,7 +4,7 @@ module Hyper.Config.Database
 )
 where
 
-import Hyper.Config.Types
+import           Hyper.Config.Types
 
 loadConfiguration :: Configuration -> IO Configuration
 loadConfiguration config = do
