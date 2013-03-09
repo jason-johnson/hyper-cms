@@ -22,7 +22,7 @@ data CEntry = CEntry String CValue deriving (Show)
 data CSection = CSection String [CEntry] deriving (Show)
 
 p_configuration :: CharParser () [CSection]
-p_configuration = comments *> spaces *> many1 p_section
+p_configuration = spaces *> comments *> many1 (p_section)
             
 p_between :: Char -> CharParser () a -> Char -> CharParser () a
 p_between left parser right =
@@ -33,14 +33,14 @@ p_section = CSection <$> p_between '[' (many1 ch) ']' <*> (spaces *> p_entries) 
         where ch = satisfy (`notElem` "]\"\\")
 
 p_entries :: CharParser () [CEntry]
-p_entries = many (comments *> entry) <?> "entries"
+p_entries = spaces *> comments *> many (entry <* comments) <?> "entries"
         where
                 entry = CEntry <$> fieldName <*> (spaces *> char '=' *> spaces *> p_value)
                 fieldName = (:) <$> letter <*> many fieldChar
                 fieldChar = letter <|> digit <|> oneOf "-_"
 
 p_comment :: CharParser () ()                
-p_comment = spaces *> char '#' *> manyTill anyChar newline *> spaces *> pure ()
+p_comment = char '#' *> manyTill anyChar newline *> spaces *> pure () <?> "comment"
 
 comments :: CharParser () [()]
 comments = many p_comment
