@@ -9,17 +9,16 @@ import           Control.Applicative
 import qualified Data.Map                      as M
 import           Data.Monoid                   (mappend)
 import           Hyper.Config.Types
-import           Text.Parsec.Prim              (putState)
-import           Text.ParserCombinators.Parsec hiding (many, optional, (<|>))
+import           Text.Parsec hiding (many, optional, (<|>))
 
-p_configuration :: CharParser (String, Configuration) Configuration
+p_configuration :: Parsec [Char] (String, Configuration) Configuration
 p_configuration = spaces *> comments *> many1 p_section *> config
             where
                 config = do
                     (_,c) <- getState
                     return c
 
-p_section :: CharParser (String, Configuration) [()]
+p_section :: Parsec [Char] (String, Configuration) [()]
 p_section = do
         section <- p_between '[' (many1 ch) ']'
         updateBoth $ updateSections section
@@ -38,7 +37,7 @@ p_section = do
                                         ds = configurationDefaultSite config
                                         keys = M.keys sites
 
-p_server_entry :: CharParser (String, Configuration) ()
+p_server_entry :: Parsec [Char] (String, Configuration) ()
 p_server_entry = many settings *> pure ()
         where settings =
                     p_port
@@ -50,7 +49,7 @@ p_server_entry = many settings *> pure ()
                 <|> p_server_passthrough        -- TODO: Cache directory is missing and is an option only for server
                 <?> "server setting"
 
-p_site_entry :: CharParser (String, Configuration) ()
+p_site_entry :: Parsec [Char] (String, Configuration) ()
 p_site_entry = many settings *> pure ()
         where settings =
                     p_site_root
@@ -59,56 +58,56 @@ p_site_entry = many settings *> pure ()
                 <?> "site settings"
 
 -- TODO: Add handling for default bare word
-p_port :: CharParser (String, Configuration) ()
+p_port :: Parsec [Char] (String, Configuration) ()
 p_port = p_setting "port" p_port' *> pure ()
         where
              p_port' = do
                 ports <- (pure <$> p_int) <|> p_list p_int <?> "port[s]"
                 updateConfig $ \config -> config { configurationSinglePort = True, configurationPorts = ports }
 
-p_ssl_port :: CharParser (String, Configuration) ()
+p_ssl_port :: Parsec [Char] (String, Configuration) ()
 p_ssl_port = p_setting "sslPort" p_ssl_port' *> pure ()
         where
                 p_ssl_port' = do
                         port <- p_int
                         updateConfig $ \config -> config { configurationSSlPort = Just port }
 
-p_resource_per_req :: CharParser (String, Configuration) ()
+p_resource_per_req :: Parsec [Char] (String, Configuration) ()
 p_resource_per_req = p_setting "resourcePerRequest" p_resource_per_req' *> pure ()
         where
                 p_resource_per_req' = do
                         rpr <- p_bool
                         updateConfig $ \config -> config { configurationResourcePerReq = rpr }
 
-p_server_index :: CharParser (String, Configuration) ()
+p_server_index :: Parsec [Char] (String, Configuration) ()
 p_server_index = do
         idx <- p_index
         updateConfig $ \config -> config { configurationDefaultSite = configurationDefaultSite config `mappend` siteConfigurationIndex idx }
         return ()
 
-p_server_passthrough :: CharParser (String, Configuration) ()
+p_server_passthrough :: Parsec [Char] (String, Configuration) ()
 p_server_passthrough = do
         ss <- p_passthrough
         updateConfig $ \config -> config { configurationDefaultSite = configurationDefaultSite config `mappend` siteConfigurationPassthrough ss }
         return ()
 
-p_site :: CharParser (String, Configuration) ()
+p_site :: Parsec [Char] (String, Configuration) ()
 p_site = p_setting "site" p_site' *> pure ()
         where
                 p_site' = do
                         s <- p_string
                         updateSite $ \_ -> s
 
-p_root :: CharParser (String, Configuration) String
+p_root :: Parsec [Char] (String, Configuration) String
 p_root = p_setting "root" p_string
 
-p_server_root :: CharParser (String, Configuration) ()
+p_server_root :: Parsec [Char] (String, Configuration) ()
 p_server_root = do
         r <- p_root
         updateConfig $ \config -> config { configurationDefaultSite = configurationDefaultSite config `mappend` siteConfigurationRoot r }
         return ()
 
-p_site_root :: CharParser (String, Configuration) ()
+p_site_root :: Parsec [Char] (String, Configuration) ()
 p_site_root = do
         r <- p_root
         updateBoth $ \(site,config) -> (site, config { configurationSites = configurationSites config `mappend` m site r (configurationDefaultSite config) })
@@ -117,7 +116,7 @@ p_site_root = do
                         m s r c = M.singleton s . siteConfigurationRoot . r' r $ c
                         r' r c = root c ++ r
 
-p_site_index :: CharParser (String, Configuration) ()
+p_site_index :: Parsec [Char] (String, Configuration) ()
 p_site_index = do
         idx <- p_index
         updateBoth $ \(site,config) -> (site, config { configurationSites = configurationSites config `mappend` m site idx })
@@ -125,7 +124,7 @@ p_site_index = do
                 where
                         m s i = M.singleton s . siteConfigurationIndex $ i
 
-p_site_passthrough :: CharParser (String, Configuration) ()
+p_site_passthrough :: Parsec [Char] (String, Configuration) ()
 p_site_passthrough = do
         ss <- p_passthrough
         updateBoth $ \(site,config) -> (site, config { configurationSites = configurationSites config `mappend` m site ss })
@@ -133,56 +132,56 @@ p_site_passthrough = do
                 where
                         m s ss = M.singleton s . siteConfigurationPassthrough $ ss
 
-p_comment :: CharParser (String, Configuration) ()
+p_comment :: Parsec [Char] (String, Configuration) ()
 p_comment = char '#' *> manyTill anyChar newline *> spaces *> pure () <?> "comment"
 
-comments :: CharParser (String, Configuration) [()]
+comments :: Parsec [Char] (String, Configuration) [()]
 comments = many p_comment
 
-p_list :: CharParser (String, Configuration) a -> CharParser (String, Configuration) [a]
+p_list :: Parsec [Char] (String, Configuration) a -> Parsec [Char] (String, Configuration) [a]
 p_list p = between (char '{' <* spaces) (char '}') $ (p <* spaces) `sepBy` (char ',' <* spaces)
 
-p_bool :: CharParser (String, Configuration) Bool
+p_bool :: Parsec [Char] (String, Configuration) Bool
 p_bool = True <$ string "true"
      <|> False <$ string "false"
      <?> "boolean"
 
-p_int :: CharParser (String, Configuration) Int
+p_int :: Parsec [Char] (String, Configuration) Int
 p_int = read <$> many1 digit
 
-p_string :: CharParser (String, Configuration) String
+p_string :: Parsec [Char] (String, Configuration) String
 p_string = between (char '\"') (char '\"') (many ch) <?> "string"
     where ch = char '\\' *> p_escape <|> satisfy (`notElem` "\"\\")
 
-p_escape :: CharParser (String, Configuration) Char
+p_escape :: Parsec [Char] (String, Configuration) Char
 p_escape = choice (zipWith decode "\\\"/" "\\\"/")
     where decode c r = r <$ char c
 
 -- helpers
 
-p_setting :: String -> CharParser (String, Configuration) a -> CharParser (String, Configuration) a
+p_setting :: String -> Parsec [Char] (String, Configuration) a -> Parsec [Char] (String, Configuration) a
 p_setting field p = string field *> spaces *> char '=' *> spaces *> p
 
-p_index :: CharParser (String, Configuration) String
+p_index :: Parsec [Char] (String, Configuration) String
 p_index = p_setting "index" p_string
 
 -- TODO: Highlight this usage of pure in the blog entry part 2
-p_passthrough :: CharParser (String, Configuration) [String]
+p_passthrough :: Parsec [Char] (String, Configuration) [String]
 p_passthrough = p_setting "passthrough" $ (pure <$> p_string) <|> p_list p_string
 
-updateSite :: (String -> String) -> CharParser (String, Configuration) ()
+updateSite :: (String -> String) -> Parsec [Char] (String, Configuration) ()
 updateSite f = do
         (site, config) <- getState
         putState (f site, config)
         return ()
 
-updateConfig :: (Configuration -> Configuration) -> CharParser (String, Configuration) ()
+updateConfig :: (Configuration -> Configuration) -> Parsec [Char] (String, Configuration) ()
 updateConfig f = do
         (site, config) <- getState
         putState (site, f config)
         return ()
 
-updateBoth :: ((String, Configuration) -> (String, Configuration)) -> CharParser (String, Configuration) ()
+updateBoth :: ((String, Configuration) -> (String, Configuration)) -> Parsec [Char] (String, Configuration) ()
 updateBoth f = do
         state <- getState
         putState $ f state
