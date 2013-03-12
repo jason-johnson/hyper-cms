@@ -36,11 +36,18 @@ data Section    = ServerSection [ServerSetting]
 p_configuration :: Parsec [Char] (String, String, Configuration) ([Section], Configuration)
 p_configuration = do
             sections <- spaces *> comments *> many1 p_section <* eof
-            (_, _, config) <- getState
-            return (sections, c config)
+            (ds, _, config) <- getState
+            return (sections, c config ds)
                 where
                     k = M.keys . configurationSites
-                    c config = config { configurationMultiSite = length (k config) /= 1 }
+                    c config ds = config {
+                          configurationMultiSite = length (k config) /= 1
+                        , configurationDefaultSite = realDS ds config                       -- While parsing the default site field was used for configuring other sites, but afterwards it points to an actual configured site
+                        , configurationSites = M.delete ds . configurationSites $ config
+                        }
+                    realDS ds config = case M.lookup ds (configurationSites config) of
+                                        Nothing     -> configurationDefaultSite config
+                                        Just site   -> site
 
 p_section :: Parsec [Char] (String, String, Configuration) Section
 p_section = do
