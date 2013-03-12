@@ -9,3 +9,4 @@ cabal-dev
 .project
 .settings/
 sites/
+hyper-cms.config
