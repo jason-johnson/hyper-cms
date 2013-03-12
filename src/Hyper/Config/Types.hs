@@ -10,7 +10,7 @@ module Hyper.Config.Types
 )
 where
 
-import           Data.Map    (Map, unionWith)
+import           Data.Map    (Map)
 import           Data.Monoid
 
 -- TODO: These names are too short, they need the site config prefix or they will clash with something
@@ -43,21 +43,6 @@ instance Monoid SiteConfiguration where
                                       (passthrough a    `mset` passthrough b)
                                       (cacheDirectory a `mset` cacheDirectory b)
     mempty = SiteConfiguration mempty mempty mempty mempty
-
-instance Monoid ConfigurationStore where
-    mappend = mset
-    mempty = ConfigFile mempty
-
-instance Monoid Configuration where
-    a `mappend` b = Configuration (configurationStore a `mappend` configurationStore b)
-                                  (configurationSinglePort b)
-                                  (configurationPorts a `mset` configurationPorts b)
-                                  (configurationSSlPort b)
-                                  (configurationMultiSite b)
-                                  (configurationResourcePerReq b)
-                                  (configurationDefaultSite a `mappend` configurationDefaultSite b)
-                                  (unionWith mset (configurationSites a) (configurationSites b))
-    mempty = Configuration mempty False mempty Nothing False True mempty mempty
 
 mset :: (Eq a, Monoid a) => a -> a -> a
 mset a b | b == mempty = a
