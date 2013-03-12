@@ -15,27 +15,27 @@ import           Data.Monoid
 
 -- TODO: These names are too short, they need the site config prefix or they will clash with something
 data SiteConfiguration = SiteConfiguration {
-          root           :: FilePath           -- TODO: For now we'll simply do file routing but we might let clients override this later
-        , index          :: FilePath
-        , passthrough    :: [String]
-        , cacheDirectory :: FilePath
-}
-          deriving (Eq, Show)
+      root           :: FilePath           -- TODO: For now we'll simply do file routing but we might let clients override this later
+    , index          :: FilePath
+    , passthrough    :: [String]
+    , cacheDirectory :: FilePath
+    }
+    deriving (Eq, Show)
 
 data ConfigurationStore = Database | ConfigFile String
-        deriving (Eq, Show)
+    deriving (Eq, Show)
 
 data Configuration = Configuration {
-          configurationStore          :: ConfigurationStore
-        , configurationSinglePort     :: Bool
-        , configurationPorts          :: [Int]
-        , configurationSSlPort        :: Maybe Int
-        , configurationMultiSite      :: Bool
-        , configurationResourcePerReq :: Bool
-        , configurationDefaultSite    :: SiteConfiguration
-        , configurationSites          :: Map String SiteConfiguration -- TODO: The key should be using some kind of Host name that Yesod uses.
-}
-        deriving (Eq, Show)
+      configurationStore          :: ConfigurationStore
+    , configurationSinglePort     :: Bool
+    , configurationPorts          :: [Int]
+    , configurationSSlPort        :: Maybe Int
+    , configurationMultiSite      :: Bool
+    , configurationResourcePerReq :: Bool
+    , configurationDefaultSite    :: SiteConfiguration
+    , configurationSites          :: Map String SiteConfiguration -- TODO: The key should be using some kind of Host name that Yesod uses.
+    }
+    deriving (Eq, Show)
 
 instance Monoid SiteConfiguration where
     a `mappend` b = SiteConfiguration (root a           `mset` root b)

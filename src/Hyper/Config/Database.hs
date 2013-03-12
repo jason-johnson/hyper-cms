@@ -8,4 +8,4 @@ import           Hyper.Config.Types
 
 loadConfiguration :: Configuration -> IO Configuration
 loadConfiguration config = do
-                                return config
+    return config
