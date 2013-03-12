@@ -39,9 +39,9 @@ p_configuration = do
             (ds, _, config) <- getState
             return (sections, c config ds)
                 where
-                    k = M.keys . configurationSites
+                    kl ds = length . filter (/= ds) . M.keys . configurationSites
                     c config ds = config {
-                          configurationMultiSite = length (k config) /= 1
+                          configurationMultiSite = kl ds config /= 0
                         , configurationDefaultSite = realDS ds config                       -- While parsing the default site field was used for configuring other sites, but afterwards it points to an actual configured site
                         , configurationSites = M.delete ds . configurationSites $ config
                         }
