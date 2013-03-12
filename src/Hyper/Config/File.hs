@@ -9,10 +9,8 @@ import           Hyper.Config.Types
 
 
 loadConfiguration :: FilePath -> Configuration -> IO Configuration
-loadConfiguration file config =
-        do
-                res <- parseConfigFile file
-                let sections = case res of
-                                Left err -> error $ show err
-                                Right s -> s
-                return config
+loadConfiguration file config = do
+    res <- parseConfigFile file config
+    return $ case res of
+        Left err -> error $ show err
+        Right (_,s) -> s
