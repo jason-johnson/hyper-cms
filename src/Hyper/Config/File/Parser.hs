@@ -45,7 +45,7 @@ p_configuration = do
 p_section :: Parsec [Char] (String, String, Configuration) Section
 p_section = do
         section <- p_between '[' (many1 ch) ']' <?> "section statement"
-        updateAll $ updateSections (t section)
+        updateAll $ updateSections section
         updateSite $ \_ -> section
         case section of
                 "server" -> ServerSection <$> p_server_entry
@@ -59,7 +59,6 @@ p_section = do
                                  where
                                         sites = configurationSites config
                                         ds = configurationDefaultSite config
-
 
 p_server_entry :: Parsec [Char] (String, String, Configuration) [ServerSetting]
 p_server_entry = spaces *> comments *> many (settings <* spaces <* comments)
