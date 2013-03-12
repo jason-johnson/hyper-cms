@@ -11,6 +11,7 @@ import           Data.Monoid         (Monoid, mappend)
 import           System.FilePath     ((</>))
 import           Text.Parsec         hiding (many, optional, (<|>))
 
+import           Data.Maybe          (fromMaybe)
 import           Hyper.Config.Types
 import           Hyper.Constants     (defaultHTTPPort, defaultSSLPort)
 
@@ -46,9 +47,7 @@ p_configuration = do
             , configurationDefaultSite = realDS ds config                       -- While parsing the default site field was used for configuring other sites, but afterwards it points to an actual configured site
             , configurationSites = M.delete ds . configurationSites $ config
             }
-        realDS ds config = case M.lookup ds (configurationSites config) of
-            Nothing     -> configurationDefaultSite config
-            Just site   -> site
+        realDS ds config = fromMaybe (configurationDefaultSite config) . M.lookup ds . configurationSites $ config
 
 p_section :: Parsec [Char] (String, String, Configuration) Section
 p_section = do
