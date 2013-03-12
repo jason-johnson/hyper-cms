@@ -20,11 +20,13 @@ data ServerSetting  =  Port [Int]
                     | ServerRoot FilePath
                     | ServerIndex String
                     | ServerPassthrough [String]
+                    | ServerCache FilePath
                       deriving (Show)
 
 data SiteSetting    = SiteRoot FilePath
                     | SiteIndex String
                     | SitePassthrough [String]
+                    | SiteCache FilePath
                       deriving (Show)
 
 data Section    = ServerSection [ServerSetting]
@@ -68,7 +70,8 @@ p_server_entry = spaces *> comments *> many (settings <* spaces <* comments)
                 <|> Site <$> p_site
                 <|> ServerRoot <$> p_server_root               -- TODO: The path strings can actually be checked for validity, or maybe not since most things are allowed in unix.  Check the lexer module if there is a lexer for this
                 <|> ServerIndex <$> p_server_index
-                <|> ServerPassthrough <$> p_server_passthrough        -- TODO: Cache directory is missing and is an option only for server
+                <|> ServerPassthrough <$> p_server_passthrough
+                <|> ServerCache <$> p_server_cache
                 <?> "server setting"
 
 p_site_entry :: Parsec [Char] (String, String, Configuration) [SiteSetting]
@@ -77,6 +80,7 @@ p_site_entry = spaces *> comments *> many (settings <* spaces <* comments)
                     SiteRoot <$> p_site_root
                 <|> SiteIndex <$> p_site_index
                 <|> SitePassthrough <$> p_site_passthrough
+                <|> SiteCache <$> p_site_cache
                 <?> "site settings"
 
 -- TODO: Add handling for default bare word
@@ -122,6 +126,12 @@ p_server_passthrough = do
         updateConfig $ \config -> config { configurationDefaultSite = configurationDefaultSite config `mappend` siteConfigurationPassthrough ss }
         return ss
 
+p_server_cache :: Parsec [Char] (String, String, Configuration) String
+p_server_cache = do
+    cd <- p_cache
+    updateConfig $ \config -> config { configurationDefaultSite = configurationDefaultSite config `mappend` siteConfigurationCacheDirectory cd }
+    return cd
+
 p_site :: Parsec [Char] (String, String, Configuration) String
 p_site = p_setting "site" p_site'
         where
@@ -149,6 +159,12 @@ p_site_passthrough = do
         ss <- p_passthrough
         updateAll $ \(dsite, site,config) -> (dsite, site, config { configurationSites = mmergeMap site (siteConfigurationPassthrough ss) $ configurationSites config })
         return ss
+
+p_site_cache :: Parsec [Char] (String, String, Configuration) String
+p_site_cache = do
+    cd <- p_cache
+    updateAll $ \(dsite, site,config) -> (dsite, site, config { configurationSites = mmergeMap site (siteConfigurationCacheDirectory cd) $ configurationSites config })
+    return cd
 
 p_comment :: Parsec [Char] (String, String, Configuration) ()
 p_comment = char '#' *> manyTill anyChar newline *> spaces *> pure () <?> "comment"
@@ -192,6 +208,9 @@ p_index = p_setting "index" p_string
 -- TODO: Highlight this usage of pure in the blog entry part 2
 p_passthrough :: Parsec [Char] (String, String, Configuration) [String]
 p_passthrough = p_setting "passthrough" $ (pure <$> p_string) <|> p_list p_string
+
+p_cache :: Parsec [Char] (String, String, Configuration) String
+p_cache = p_setting "cache" p_string
 
 updateDefaultSite :: (String -> String) -> Parsec [Char] (String, String, Configuration) ()
 updateDefaultSite f = do
