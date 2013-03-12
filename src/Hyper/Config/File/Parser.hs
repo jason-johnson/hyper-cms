@@ -82,7 +82,7 @@ p_port = p_setting "port" p_port' <?> "port"
         where
              p_port' = do
                 ports <- (pure <$> p_int) <|> (pure <$> p_default_int defaultHTTPPort) <|> p_list p_int <?> "port[s]|default"
-                updateConfig $ \config -> config { configurationSinglePort = True, configurationPorts = ports }
+                updateConfig $ \config -> config { configurationSinglePort = length ports == 1, configurationPorts = ports }
                 return ports
 
 p_ssl_port :: Parsec [Char] (String, String, Configuration) Int
