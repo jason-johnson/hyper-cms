@@ -57,10 +57,23 @@ p_section = do
     updateSite $ \_ -> section
     case section of
         "server"    -> ServerSection <$> p_server_entry
-        _           -> SiteSection section <$> p_site_entry
+        _           -> SiteSection section <$> p_site_entry <* fixupCache section
     where
         p_between left parser right = between (char left <* spaces) (char right) (parser <* spaces)
         ch = satisfy (`notElem` "]\"\\")                                    -- TODO: This should actually be "server", "default" or a web address
+        fixupCache section = do
+            (ds,_,config) <- getState
+            fixupCache' ds section config
+        fixupCache' ds section config
+            | ds == section = return ()
+            | otherwise =
+                let
+                    defaultCache = cacheDirectory . configurationDefaultSite $ config
+                    siteCache = cacheDirectory $ configurationSites config M.! section
+                    in
+                        if defaultCache == siteCache
+                        then updateSitesMap $ \site sites _ -> mmergeMap site (siteConfigurationCacheDirectory $ siteCache </> section) sites
+                        else return ()
         updateSections "server" state                   = state
         updateSections section s@(dsite, site,config)   | section `M.member` sites = s
                                                         | otherwise = (dsite, site, config { configurationSites = M.insert section ds sites })
