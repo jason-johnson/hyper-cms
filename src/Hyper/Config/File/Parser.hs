@@ -6,12 +6,12 @@ module Hyper.Config.File.Parser
 where
 
 import           Control.Applicative
-import qualified Data.Map                      as M
-import           Text.Parsec hiding (many, optional, (<|>))
+import qualified Data.Map            as M
 import           Data.Monoid         (Monoid, mappend)
+import           Text.Parsec         hiding (many, optional, (<|>))
 
 import           Hyper.Config.Types
-import           Hyper.Constants (defaultHTTPPort, defaultSSLPort)
+import           Hyper.Constants     (defaultHTTPPort, defaultSSLPort)
 
 data ServerSetting  =  Port [Int]
                     | SSLPort Int
