@@ -14,4 +14,4 @@ loadConfiguration file config =
                 res <- parseConfigFile file config
                 return $ case res of
                                 Left err -> error $ show err
-                                Right s -> s
+                                Right (_,s) -> s
