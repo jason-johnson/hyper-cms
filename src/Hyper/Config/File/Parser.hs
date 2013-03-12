@@ -8,6 +8,7 @@ where
 import           Control.Applicative
 import qualified Data.Map            as M
 import           Data.Monoid         (Monoid, mappend)
+import           System.FilePath     ((</>))
 import           Text.Parsec         hiding (many, optional, (<|>))
 
 import           Hyper.Config.Types
@@ -152,8 +153,7 @@ p_site_root = do
     updateSitesMap $ \site sites config -> mmergeMap site (siteConfig r config) sites
     return r
     where
-        path r c = c ++ r
-        siteConfig r = siteConfigurationRoot . path r . root . configurationDefaultSite
+        siteConfig r = siteConfigurationRoot . (</> r) . root . configurationDefaultSite
 
 p_site_index :: Parsec [Char] (String, String, Configuration) String
 p_site_index = do
@@ -173,9 +173,7 @@ p_site_cache = do
     updateSitesMap $ \site sites config -> mmergeMap site (siteConfig cd config) sites
     return cd
     where
-        path cd@('/':_) _ = cd
-        path cd b = b ++ cd -- TODO: Change this to flip (++)  after it works
-        siteConfig cd = siteConfigurationCacheDirectory . path cd . cacheDirectory . configurationDefaultSite
+        siteConfig cd = siteConfigurationCacheDirectory . (</> cd) . cacheDirectory . configurationDefaultSite
 
 p_comment :: Parsec [Char] (String, String, Configuration) ()
 p_comment = char '#' *> manyTill anyChar newline *> spaces *> pure () <?> "comment"

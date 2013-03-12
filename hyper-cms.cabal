@@ -14,7 +14,8 @@ executable hyper-cms
                    http-types,
                    wai,
                    parsec,
-                   containers
+                   containers,
+                   filepath
   ghc-options:     -Wall
   extensions:      OverloadedStrings
   other-modules:   
