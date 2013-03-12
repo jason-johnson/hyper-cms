@@ -162,8 +162,12 @@ p_site_passthrough = do
 p_site_cache :: Parsec [Char] (String, String, Configuration) String
 p_site_cache = do
     cd <- p_cache
-    updateAll $ \(dsite, site,config) -> (dsite, site, config { configurationSites = mmergeMap site (siteConfigurationCacheDirectory cd) $ configurationSites config })
+    updateSitesMap $ \site sites config -> mmergeMap site (siteConfig cd config) sites
     return cd
+        where
+            path cd@('/':_) _ = cd
+            path cd b = b ++ cd -- TODO: Change this to flip (++)  after it works
+            siteConfig cd = siteConfigurationCacheDirectory . path cd . cacheDirectory . configurationDefaultSite
 
 p_comment :: Parsec [Char] (String, String, Configuration) ()
 p_comment = char '#' *> manyTill anyChar newline *> spaces *> pure () <?> "comment"
@@ -234,6 +238,9 @@ updateAll f = do
         state <- getState
         putState $ f state
         return ()
+
+updateSitesMap :: (String -> M.Map String SiteConfiguration -> Configuration -> M.Map String SiteConfiguration) -> Parsec [Char] (String, String, Configuration) ()
+updateSitesMap f = updateAll $ \(dsite, site, config) -> (dsite, site, config { configurationSites = f site (configurationSites config) config })
 
 mmergeMap :: (Ord k, Monoid a) => k -> a -> M.Map k a -> M.Map k a
 mmergeMap = M.insertWith (flip mappend)
