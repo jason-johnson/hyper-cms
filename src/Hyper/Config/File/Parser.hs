@@ -14,7 +14,7 @@ import           Text.Parsec         hiding (many, optional, (<|>))
 import           Hyper.Config.Types
 import           Hyper.Constants     (defaultHTTPPort, defaultSSLPort)
 
-data ServerSetting  =  Port [Int]
+data ServerSetting  = Port [Int]
                     | SSLPort Int
                     | ResourcePerReq Bool
                     | Site String
