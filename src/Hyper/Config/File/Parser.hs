@@ -127,9 +127,6 @@ p_site = p_setting "site" p_site'
                         updateSite $ \_ -> s
                         return s
 
-p_root :: Parsec [Char] (String, Configuration) String
-p_root = p_setting "root" p_string
-
 p_site_root :: Parsec [Char] (String, Configuration) FilePath
 p_site_root = do
         r <- p_root
@@ -187,6 +184,9 @@ p_escape = choice (zipWith decode "\\\"/" "\\\"/")
 
 p_setting :: String -> Parsec [Char] (String, Configuration) a -> Parsec [Char] (String, Configuration) a
 p_setting field p = string field *> spaces *> char '=' *> spaces *> p
+
+p_root :: Parsec [Char] (String, Configuration) String
+p_root = p_setting "root" p_string
 
 p_index :: Parsec [Char] (String, Configuration) String
 p_index = p_setting "index" p_string
