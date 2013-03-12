@@ -110,25 +110,25 @@ p_resource_per_req = p_setting "resourcePerRequest" p_resource_per_req'
 p_server_root :: Parsec [Char] (String, String, Configuration) FilePath
 p_server_root = do
         r <- p_root
-        updateConfig $ \config -> config { configurationDefaultSite = configurationDefaultSite config `mappend` siteConfigurationRoot r }
+        updateDefaultSiteConfig (`mappend` siteConfigurationRoot r)
         return r
 
 p_server_index :: Parsec [Char] (String, String, Configuration) String
 p_server_index = do
         idx <- p_index
-        updateConfig $ \config -> config { configurationDefaultSite = configurationDefaultSite config `mappend` siteConfigurationIndex idx }
+        updateDefaultSiteConfig (`mappend` siteConfigurationIndex idx)
         return idx
 
 p_server_passthrough :: Parsec [Char] (String, String, Configuration) [String]
 p_server_passthrough = do
         ss <- p_passthrough
-        updateConfig $ \config -> config { configurationDefaultSite = configurationDefaultSite config `mappend` siteConfigurationPassthrough ss }
+        updateDefaultSiteConfig (`mappend` siteConfigurationPassthrough ss)
         return ss
 
 p_server_cache :: Parsec [Char] (String, String, Configuration) String
 p_server_cache = do
     cd <- p_cache
-    updateConfig $ \config -> config { configurationDefaultSite = configurationDefaultSite config `mappend` siteConfigurationCacheDirectory cd }
+    updateDefaultSiteConfig (`mappend` siteConfigurationCacheDirectory cd)
     return cd
 
 p_site :: Parsec [Char] (String, String, Configuration) String
@@ -242,6 +242,9 @@ updateAll f = do
 
 updateSitesMap :: (String -> M.Map String SiteConfiguration -> Configuration -> M.Map String SiteConfiguration) -> Parsec [Char] (String, String, Configuration) ()
 updateSitesMap f = updateAll $ \(dsite, site, config) -> (dsite, site, config { configurationSites = f site (configurationSites config) config })
+
+updateDefaultSiteConfig :: (SiteConfiguration -> SiteConfiguration) -> Parsec [Char] (String, String, Configuration) ()
+updateDefaultSiteConfig f = updateConfig $ \config -> config { configurationDefaultSite = f . configurationDefaultSite $ config }
 
 mmergeMap :: (Ord k, Monoid a) => k -> a -> M.Map k a -> M.Map k a
 mmergeMap = M.insertWith (flip mappend)
