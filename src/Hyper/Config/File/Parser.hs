@@ -35,7 +35,10 @@ p_configuration :: Parsec [Char] (String, String, Configuration) ([Section], Con
 p_configuration = do
             sections <- spaces *> comments *> many1 p_section <* eof
             (_, _, config) <- getState
-            return (sections, config)
+            return (sections, c config)
+                where
+                    k = M.keys . configurationSites
+                    c config = config { configurationMultiSite = length (k config) /= 1 }
 
 p_section :: Parsec [Char] (String, String, Configuration) Section
 p_section = do
