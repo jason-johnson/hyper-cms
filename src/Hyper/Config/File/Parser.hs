@@ -142,21 +142,22 @@ p_site = p_setting "site" p_site'
 p_site_root :: Parsec [Char] (String, String, Configuration) FilePath
 p_site_root = do
         r <- p_root
-        updateAll $ \(dsite, site,config) -> (dsite, site, config { configurationSites = mmergeMap site (siteConfigurationRoot . r' r . configurationDefaultSite $ config) $ configurationSites config })
+        updateSitesMap $ \site sites config -> mmergeMap site (siteConfig r config) sites
         return r
-                where
-                        r' r c = root c ++ r
+            where
+                path r c = c ++ r
+                siteConfig r = siteConfigurationRoot . path r . root . configurationDefaultSite
 
 p_site_index :: Parsec [Char] (String, String, Configuration) String
 p_site_index = do
         idx <- p_index
-        updateAll $ \(dsite, site,config) -> (dsite, site, config { configurationSites = mmergeMap site (siteConfigurationIndex idx) $ configurationSites config })
+        updateSitesMap $ \site sites _ -> mmergeMap site (siteConfigurationIndex idx) sites
         return idx
 
 p_site_passthrough :: Parsec [Char] (String, String, Configuration) [String]
 p_site_passthrough = do
         ss <- p_passthrough
-        updateAll $ \(dsite, site,config) -> (dsite, site, config { configurationSites = mmergeMap site (siteConfigurationPassthrough ss) $ configurationSites config })
+        updateSitesMap $ \site sites _ -> mmergeMap site (siteConfigurationPassthrough ss) sites
         return ss
 
 p_site_cache :: Parsec [Char] (String, String, Configuration) String
