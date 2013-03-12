@@ -11,6 +11,7 @@ import           Data.Monoid                   (mappend)
 import           Text.Parsec hiding (many, optional, (<|>))
 
 import           Hyper.Config.Types
+import           Hyper.Constants (defaultHTTPPort, defaultSSLPort)
 
 data ServerSetting  =  Port [Int]
                     | SSLPort Int
@@ -80,7 +81,7 @@ p_port :: Parsec [Char] (String, Configuration) [Int]
 p_port = p_setting "port" p_port' <?> "port"
         where
              p_port' = do
-                ports <- (pure <$> p_int) <|> p_list p_int <?> "port[s]"
+                ports <- (pure <$> p_int) <|> (pure <$> p_default_int defaultHTTPPort) <|> p_list p_int <?> "port[s]|default"
                 updateConfig $ \config -> config { configurationSinglePort = True, configurationPorts = ports }
                 return ports
 
@@ -88,7 +89,7 @@ p_ssl_port :: Parsec [Char] (String, Configuration) Int
 p_ssl_port = p_setting "sslPort" p_ssl_port' <?> "ssl port"
         where
                 p_ssl_port' = do
-                        port <- p_int
+                        port <- p_int <|> p_default_int defaultSSLPort
                         updateConfig $ \config -> config { configurationSSlPort = Just port }
                         return port
 
@@ -170,6 +171,9 @@ p_bool = True <$ string "true"
 
 p_int :: Parsec [Char] (String, Configuration) Int
 p_int = read <$> many1 digit
+
+p_default_int :: Int -> Parsec [Char] (String, Configuration) Int
+p_default_int i = string "default" *> pure i
 
 p_string :: Parsec [Char] (String, Configuration) String
 p_string = between (char '\"') (char '\"') (many ch) <?> "string"
