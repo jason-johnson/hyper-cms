@@ -35,7 +35,10 @@ data Section        = ServerSection [ServerSetting]
                     | SiteSection String [SiteSetting]
                       deriving (Show)
 
-p_configuration :: Parsec [Char] (String, String, Configuration) ([Section], Configuration)
+type ParserState = (String, String, Configuration)
+type ConfigParser = Parsec String ParserState
+
+p_configuration :: ConfigParser ([Section], Configuration)
 p_configuration = do
     sections <- spaces *> comments *> many1 p_section <* eof
     (ds, _, config) <- getState
@@ -49,7 +52,7 @@ p_configuration = do
             }
         realDS ds config = fromMaybe (configurationDefaultSite config) . M.lookup ds . configurationSites $ config
 
-p_section :: Parsec [Char] (String, String, Configuration) Section
+p_section :: ConfigParser Section
 p_section = do
     section <- p_between '[' (many1 ch) ']' <?> "section statement"
     updateAll $ updateSections section
@@ -80,7 +83,7 @@ p_section = do
                 sites   = configurationSites config
                 ds      = configurationDefaultSite config
 
-p_server_entry :: Parsec [Char] (String, String, Configuration) [ServerSetting]
+p_server_entry :: ConfigParser [ServerSetting]
 p_server_entry = spaces *> comments *> many (settings <* spaces <* comments)
     where
         settings =          try (Port <$> p_port)
@@ -93,7 +96,7 @@ p_server_entry = spaces *> comments *> many (settings <* spaces <* comments)
                         <|> ServerCache <$> p_server_cache
                         <?> "server setting"
 
-p_site_entry :: Parsec [Char] (String, String, Configuration) [SiteSetting]
+p_site_entry :: ConfigParser [SiteSetting]
 p_site_entry = spaces *> comments *> many (settings <* spaces <* comments)
     where
         settings =      SiteRoot <$> p_site_root
@@ -103,7 +106,7 @@ p_site_entry = spaces *> comments *> many (settings <* spaces <* comments)
                     <?> "site settings"
 
 -- TODO: Add handling for default bare word
-p_port :: Parsec [Char] (String, String, Configuration) [Int]
+p_port :: ConfigParser [Int]
 p_port = p_setting "port" p_port' <?> "port"
     where
         p_port' = do
@@ -111,7 +114,7 @@ p_port = p_setting "port" p_port' <?> "port"
             updateConfig $ \config -> config { configurationSinglePort = length ports == 1, configurationPorts = ports }
             return ports
 
-p_ssl_port :: Parsec [Char] (String, String, Configuration) Int
+p_ssl_port :: ConfigParser Int
 p_ssl_port = p_setting "sslPort" p_ssl_port' <?> "ssl port"
     where
         p_ssl_port' = do
@@ -119,7 +122,7 @@ p_ssl_port = p_setting "sslPort" p_ssl_port' <?> "ssl port"
             updateConfig $ \config -> config { configurationSSlPort = Just port }
             return port
 
-p_resource_per_req :: Parsec [Char] (String, String, Configuration) Bool
+p_resource_per_req :: ConfigParser Bool
 p_resource_per_req = p_setting "resourcePerRequest" p_resource_per_req'
     where
         p_resource_per_req' = do
@@ -127,31 +130,31 @@ p_resource_per_req = p_setting "resourcePerRequest" p_resource_per_req'
             updateConfig $ \config -> config { configurationResourcePerReq = rpr }
             return rpr
 
-p_server_root :: Parsec [Char] (String, String, Configuration) FilePath
+p_server_root :: ConfigParser FilePath
 p_server_root = do
     r <- p_root
     updateDefaultSiteConfig (`mappend` siteConfigurationRoot r)
     return r
 
-p_server_index :: Parsec [Char] (String, String, Configuration) String
+p_server_index :: ConfigParser String
 p_server_index = do
     idx <- p_index
     updateDefaultSiteConfig (`mappend` siteConfigurationIndex idx)
     return idx
 
-p_server_passthrough :: Parsec [Char] (String, String, Configuration) [String]
+p_server_passthrough :: ConfigParser [String]
 p_server_passthrough = do
     ss <- p_passthrough
     updateDefaultSiteConfig (`mappend` siteConfigurationPassthrough ss)
     return ss
 
-p_server_cache :: Parsec [Char] (String, String, Configuration) String
+p_server_cache :: ConfigParser String
 p_server_cache = do
     cd <- p_cache
     updateDefaultSiteConfig (`mappend` siteConfigurationCacheDirectory cd)
     return cd
 
-p_site :: Parsec [Char] (String, String, Configuration) String
+p_site :: ConfigParser String
 p_site = p_setting "site" p_site'
     where
         p_site' = do
@@ -159,7 +162,7 @@ p_site = p_setting "site" p_site'
             updateDefaultSite $ \_ -> s
             return s
 
-p_site_root :: Parsec [Char] (String, String, Configuration) FilePath
+p_site_root :: ConfigParser FilePath
 p_site_root = do
     r <- p_root
     updateSitesMap $ \site sites config -> mmergeMap site (siteConfig r config) sites
@@ -167,19 +170,19 @@ p_site_root = do
     where
         siteConfig r = siteConfigurationRoot . (</> r) . root . configurationDefaultSite
 
-p_site_index :: Parsec [Char] (String, String, Configuration) String
+p_site_index :: ConfigParser String
 p_site_index = do
     idx <- p_index
     updateSitesMap $ \site sites _ -> mmergeMap site (siteConfigurationIndex idx) sites
     return idx
 
-p_site_passthrough :: Parsec [Char] (String, String, Configuration) [String]
+p_site_passthrough :: ConfigParser [String]
 p_site_passthrough = do
     ss <- p_passthrough
     updateSitesMap $ \site sites _ -> mmergeMap site (siteConfigurationPassthrough ss) sites
     return ss
 
-p_site_cache :: Parsec [Char] (String, String, Configuration) String
+p_site_cache :: ConfigParser String
 p_site_cache = do
     cd <- p_cache
     updateSitesMap $ \site sites config -> mmergeMap site (siteConfig cd config) sites
@@ -187,82 +190,82 @@ p_site_cache = do
     where
         siteConfig cd = siteConfigurationCacheDirectory . (</> cd) . cacheDirectory . configurationDefaultSite
 
-p_comment :: Parsec [Char] (String, String, Configuration) ()
+p_comment :: ConfigParser ()
 p_comment = char '#' *> manyTill anyChar newline *> spaces *> pure () <?> "comment"
 
-comments :: Parsec [Char] (String, String, Configuration) [()]
+comments :: ConfigParser [()]
 comments = many p_comment
 
-p_list :: Parsec [Char] (String, String, Configuration) a -> Parsec [Char] (String, String, Configuration) [a]
+p_list :: ConfigParser a -> ConfigParser [a]
 p_list p = between (char '{' <* spaces) (char '}') $ (p <* spaces) `sepBy` (char ',' <* spaces)
 
-p_bool :: Parsec [Char] (String, String, Configuration) Bool
+p_bool :: ConfigParser Bool
 p_bool = True <$ string "true"
      <|> False <$ string "false"
      <?> "boolean"
 
-p_int :: Parsec [Char] (String, String, Configuration) Int
+p_int :: ConfigParser Int
 p_int = read <$> many1 digit
 
-p_default_int :: Int -> Parsec [Char] (String, String, Configuration) Int
+p_default_int :: Int -> ConfigParser Int
 p_default_int i = string "default" *> pure i
 
-p_string :: Parsec [Char] (String, String, Configuration) String
+p_string :: ConfigParser String
 p_string = between (char '\"') (char '\"') (many ch) <?> "string"
     where
         ch = char '\\' *> p_escape <|> satisfy (`notElem` "\"\\")
 
-p_escape :: Parsec [Char] (String, String, Configuration) Char
+p_escape :: ConfigParser Char
 p_escape = choice (zipWith decode "\\\"/" "\\\"/")
     where
         decode c r = r <$ char c
 
 -- helpers
 
-p_setting :: String -> Parsec [Char] (String, String, Configuration) a -> Parsec [Char] (String, String, Configuration) a
+p_setting :: String -> ConfigParser a -> ConfigParser a
 p_setting field p = string field *> spaces *> char '=' *> spaces *> p
 
-p_root :: Parsec [Char] (String, String, Configuration) String
+p_root :: ConfigParser String
 p_root = p_setting "root" p_string
 
-p_index :: Parsec [Char] (String, String, Configuration) String
+p_index :: ConfigParser String
 p_index = p_setting "index" p_string
 
 -- TODO: Highlight this usage of pure in the blog entry part 2
-p_passthrough :: Parsec [Char] (String, String, Configuration) [String]
+p_passthrough :: ConfigParser [String]
 p_passthrough = p_setting "passthrough" $ (pure <$> p_string) <|> p_list p_string
 
-p_cache :: Parsec [Char] (String, String, Configuration) String
+p_cache :: ConfigParser String
 p_cache = p_setting "cache" p_string
 
-updateDefaultSite :: (String -> String) -> Parsec [Char] (String, String, Configuration) ()
+updateDefaultSite :: (String -> String) -> ConfigParser ()
 updateDefaultSite f = do
     (defaultSite, site, config) <- getState
     putState (f defaultSite, site, config)
     return ()
 
-updateSite :: (String -> String) -> Parsec [Char] (String, String, Configuration) ()
+updateSite :: (String -> String) -> ConfigParser ()
 updateSite f = do
     (defaultSite, site, config) <- getState
     putState (defaultSite, f site, config)
     return ()
 
-updateConfig :: (Configuration -> Configuration) -> Parsec [Char] (String, String, Configuration) ()
+updateConfig :: (Configuration -> Configuration) -> ConfigParser ()
 updateConfig f = do
     (defaultSite, site, config) <- getState
     putState (defaultSite, site, f config)
     return ()
 
-updateAll :: ((String, String, Configuration) -> (String, String, Configuration)) -> Parsec [Char] (String, String, Configuration) ()
+updateAll :: (ParserState -> ParserState) -> ConfigParser ()
 updateAll f = do
     state <- getState
     putState $ f state
     return ()
 
-updateSitesMap :: (String -> M.Map String SiteConfiguration -> Configuration -> M.Map String SiteConfiguration) -> Parsec [Char] (String, String, Configuration) ()
+updateSitesMap :: (String -> M.Map String SiteConfiguration -> Configuration -> M.Map String SiteConfiguration) -> ConfigParser ()
 updateSitesMap f = updateAll $ \(dsite, site, config) -> (dsite, site, config { configurationSites = f site (configurationSites config) config })
 
-updateDefaultSiteConfig :: (SiteConfiguration -> SiteConfiguration) -> Parsec [Char] (String, String, Configuration) ()
+updateDefaultSiteConfig :: (SiteConfiguration -> SiteConfiguration) -> ConfigParser ()
 updateDefaultSiteConfig f = updateConfig $ \config -> config { configurationDefaultSite = f . configurationDefaultSite $ config }
 
 mmergeMap :: (Ord k, Monoid a) => k -> a -> M.Map k a -> M.Map k a
