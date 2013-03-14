@@ -35,7 +35,9 @@ data Section        = ServerSection [ServerSetting]
                     | SiteSection String [SiteSetting]
                       deriving (Show)
 
-type ParserState = (String, String, Configuration)
+type DefaultSiteName = String
+type CurrentSection = String
+type ParserState = (DefaultSiteName, CurrentSection, Configuration)
 type ConfigParser = Parsec String ParserState
 
 p_configuration :: ConfigParser ([Section], Configuration)
@@ -238,13 +240,13 @@ p_passthrough = p_setting "passthrough" $ (pure <$> p_string) <|> p_list p_strin
 p_cache :: ConfigParser String
 p_cache = p_setting "cache" p_string
 
-updateDefaultSite :: (String -> String) -> ConfigParser ()
+updateDefaultSite :: (DefaultSiteName -> DefaultSiteName) -> ConfigParser ()
 updateDefaultSite f = do
     (defaultSite, site, config) <- getState
     putState (f defaultSite, site, config)
     return ()
 
-updateSite :: (String -> String) -> ConfigParser ()
+updateSite :: (CurrentSection -> CurrentSection) -> ConfigParser ()
 updateSite f = do
     (defaultSite, site, config) <- getState
     putState (defaultSite, f site, config)
@@ -273,7 +275,7 @@ mmergeMap = M.insertWith (flip mappend)
 
 -- Interface
 
-parseInput :: SourceName -> [Char] -> Configuration -> Either ParseError ([Section], Configuration)
+parseInput :: SourceName -> String -> Configuration -> Either ParseError ([Section], Configuration)
 parseInput file input config = runParser p_configuration ("default", "", config) file input
 
 parseConfigFile :: FilePath -> Configuration -> IO (Either ParseError ([Section], Configuration))
