@@ -6,15 +6,16 @@ module Hyper.Network.Wai.Handler
 )
 where
 
-import Network.Wai
-import Network.HTTP.Types
-import Data.ByteString.Lazy.Char8 () -- Just for an orphan instance
-import           System.FilePath     (takeExtension, dropTrailingPathSeparator, (</>))
-
-import Hyper.Config.Types (SiteConfiguration)
-import qualified Hyper.Config.Types as T
 import           Data.ByteString.Char8      (ByteString, append, pack, unpack)
+import           Data.ByteString.Lazy.Char8 ()
+import           Network.HTTP.Types
+import           Network.Wai
+import           System.FilePath            (dropTrailingPathSeparator,
+                                             takeExtension, (</>))
+
 import           Data.String                (IsString)
+import           Hyper.Config.Types         (SiteConfiguration)
+import qualified Hyper.Config.Types         as T
 
 isPassthrough :: FilePath -> SiteConfiguration -> Bool
 isPassthrough file = any (== (tail . takeExtension) file) . T.passthrough
