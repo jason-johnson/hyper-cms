@@ -167,30 +167,26 @@ p_site = p_setting "site" p_site'
 p_site_root :: ConfigParser FilePath
 p_site_root = do
     r <- p_root
-    updateSitesMap $ \site sites config -> mmergeMap site (siteConfig r config) sites
+    mergeSitesMap $ siteConfigurationRoot . (</> r) . root . configurationDefaultSite
     return r
-    where
-        siteConfig r = siteConfigurationRoot . (</> r) . root . configurationDefaultSite
 
 p_site_index :: ConfigParser String
 p_site_index = do
     idx <- p_index
-    updateSitesMap $ \site sites _ -> mmergeMap site (siteConfigurationIndex idx) sites
+    mergeSitesMap $ \_ -> siteConfigurationIndex idx
     return idx
 
 p_site_passthrough :: ConfigParser [String]
 p_site_passthrough = do
     ss <- p_passthrough
-    updateSitesMap $ \site sites _ -> mmergeMap site (siteConfigurationPassthrough ss) sites
+    mergeSitesMap $ \_ -> siteConfigurationPassthrough ss
     return ss
 
 p_site_cache :: ConfigParser String
 p_site_cache = do
     cd <- p_cache
-    updateSitesMap $ \site sites config -> mmergeMap site (siteConfig cd config) sites
+    mergeSitesMap $ siteConfigurationCacheDirectory . (</> cd) . cacheDirectory . configurationDefaultSite
     return cd
-    where
-        siteConfig cd = siteConfigurationCacheDirectory . (</> cd) . cacheDirectory . configurationDefaultSite
 
 p_comment :: ConfigParser ()
 p_comment = char '#' *> manyTill anyChar newline *> spaces *> pure () <?> "comment"
@@ -266,6 +262,9 @@ updateAll f = do
 
 updateSitesMap :: (String -> M.Map String SiteConfiguration -> Configuration -> M.Map String SiteConfiguration) -> ConfigParser ()
 updateSitesMap f = updateAll $ \(dsite, site, config) -> (dsite, site, config { configurationSites = f site (configurationSites config) config })
+
+mergeSitesMap :: (Configuration -> SiteConfiguration) -> ConfigParser ()
+mergeSitesMap f = updateSitesMap $ \site sites config -> mmergeMap site (f config) sites
 
 updateDefaultSiteConfig :: (SiteConfiguration -> SiteConfiguration) -> ConfigParser ()
 updateDefaultSiteConfig f = updateConfig $ \config -> config { configurationDefaultSite = f . configurationDefaultSite $ config }
