@@ -1,8 +1,6 @@
 module Hyper.Network.Wai.Handler
 (
   dispatch
-, isPassthrough
-, dispatchStaticFile
 )
 where
 
@@ -26,6 +24,17 @@ dispatchStaticFile root file = ResponseFile status200 [textContentType file] (ro
 dispatchPlainFile :: String -> String -> Response
 dispatchPlainFile root file = ResponseFile status200 [("Content-Type", "text/plain")] (root <\> file) Nothing
 
+(<\>) :: FilePath -> FilePath -> FilePath
+a <\> b@('/':_) = dropTrailingPathSeparator a ++ b
+a <\> b = a </> b
+
+textContentType :: IsString t => FilePath -> (t, ByteString)
+textContentType file = ("Content-Type", append "text/" t)
+    where
+        t = pack . tail . takeExtension $ file
+
+-- Interface
+
 dispatch :: SiteConfiguration -> Application
 dispatch site request = case rawPathInfo request of
     "/" -> return index'
@@ -37,12 +46,3 @@ dispatch site request = case rawPathInfo request of
             | otherwise = dispatchPlainFile root path
         root = T.root site
         idx = T.index site
-
-(<\>) :: FilePath -> FilePath -> FilePath
-a <\> b@('/':_) = dropTrailingPathSeparator a ++ b
-a <\> b = a </> b
-
-textContentType :: IsString t => FilePath -> (t, ByteString)
-textContentType file = ("Content-Type", append "text/" t)
-    where
-        t = pack . tail . takeExtension $ file
