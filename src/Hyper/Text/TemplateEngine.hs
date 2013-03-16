@@ -7,7 +7,8 @@ where
 import Data.ByteString as B
 import Data.ByteString.Char8 as B8
 import System.IO (stderr)
-import System.FilePath ((</>))
+import System.FilePath ((</>), takeDirectory)
+import System.Directory (doesFileExist)
 import Data.Map as M
 import Data.List as L
 import Data.Maybe (fromMaybe)
@@ -58,10 +59,17 @@ parseCommand comm write vars = let (command, rest) = breakCommand comm in
 
 applyTemplate :: FilePath -> FilePath -> FilePath -> VariableMap -> IO ()
 applyTemplate template current root vars = do
-    c <- B8.readFile $ root </> current </> template
+    path <- findFile current
+    c <- B8.readFile path
     vars' <- processFileContents c write vars
     B8.hPutStrLn stderr $ "vars were: " `B8.append` B8.pack (show vars')
     where
+        findFile c = do
+            let path = root </> c </> template
+            exists <- doesFileExist path
+            if exists then return path else findFile (upDir c)
+        upDir "." = error $ "template file: " ++ template ++ " not found"
+        upDir dir = takeDirectory dir
         write "" v = return v
         write s v = do
             B8.hPutStrLn stderr $ "writing to cache: '" `B8.append` s `B8.append` "'"
