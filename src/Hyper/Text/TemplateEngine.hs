@@ -4,8 +4,6 @@ module Hyper.Text.TemplateEngine
 )
 where
 
-{-# LANGUAGE OverloadedStrings #-}
-
 import Data.ByteString as B
 import Data.ByteString.Char8 as B8
 import System.IO (stderr)
