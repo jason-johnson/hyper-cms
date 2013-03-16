@@ -24,21 +24,24 @@ commands = M.fromList [
     ]
 
 -- TODO: most of these exceptions aren't actually being thrown.  That will have to be dealt with at some point
-processFileContents :: ByteString -> (ByteString -> IO ()) -> VariableMap -> IO VariableMap
+processFileContents :: ByteString -> (ByteString -> VariableMap -> IO VariableMap) -> VariableMap -> IO VariableMap
 processFileContents contents write vars = breakFileContents contents
     where
+        breakFileContents = process . B8.breakSubstring "<hyper:"
         process (static, command) = do
-            write static
-            parseCommand command
-        parseCommand "" = return vars
-        parseCommand c = let (command, rest) = breakCommand c in
-            processCommand command $ parseArgs command rest
+            vars' <- write static vars
+            parseCommand command write vars'
+
+parseCommand :: ByteString -> (ByteString -> VariableMap -> IO VariableMap) -> VariableMap -> IO VariableMap
+parseCommand "" _ vars = return vars
+parseCommand comm write vars = let (command, rest) = breakCommand comm in
+    processCommand command $ parseArgs command rest
+    where
         parseArgs c a = let
             (args, rest) = breakEndTag a
             (content, rest') = breakCloseTag c rest in
             (processArgs c args, content, dropCommand c rest')
         processArgs com = toPairs com . Prelude.filter (not . B8.null) . B8.splitWith (\c -> c == ' ' || c == '=')
-        breakFileContents = process . B8.breakSubstring "<hyper:"
         breakCommand = B8.break (== ' ') . B8.drop 7
         breakEndTag = B8.break (== '>')
         breakCloseTag c = B8.breakSubstring ("</hyper:" `B8.append` c `B8.append` ">") . B8.drop 1
@@ -50,22 +53,8 @@ processFileContents contents write vars = breakFileContents contents
             let f = fromMaybe parseFail . M.lookup c $ commands
             vars' <- f args content vars
             processFileContents rest write vars'
-
             where
                 parseFail = error $ "parse fail: templied called undefined command: '" ++ B8.unpack c ++ "'"
-
-
---B8.hPutStrLn stderr $ B8.concat [
---              "got command: '"
---            , c
---            , "' with arguments: '"
---            , B8.pack . show $ args
---            , "' content: '"
---            , content
---            , "' and rest: '"
---            , rest
---            , "'"
---            ]
 
 applyTemplate :: FilePath -> FilePath -> FilePath -> VariableMap -> IO ()
 applyTemplate template current root vars = do
@@ -73,8 +62,10 @@ applyTemplate template current root vars = do
     vars' <- processFileContents c write vars
     B8.hPutStrLn stderr $ "vars were: " `B8.append` B8.pack (show vars')
     where
-        write "" = return ()
-        write s = B8.hPutStrLn stderr $ "writing to cache: '" `B8.append` s `B8.append` "'"
+        write "" v = return v
+        write s v = do
+            B8.hPutStrLn stderr $ "writing to cache: '" `B8.append` s `B8.append` "'"
+            return v
 
 -- commands
 
@@ -85,8 +76,8 @@ commandApply args content vars = do
     return $
         vars'
         where
-            write "" = return ()
-            write s = B8.hPutStrLn stderr $ "writing to cache from apply: '" `B8.append` s `B8.append` "'"
+            write "" v = return v
+            write s v = return $ M.insertWith (flip B8.append) Content s v
 
 commandLet :: CommandArgs -> ByteString -> VariableMap -> IO VariableMap
 commandLet args content vars = let name = tryAttrLookup "let" "name" args in
