@@ -20,10 +20,11 @@ type TemplateState = (String, String, String, VariableMap)
 
 type CommandArgs = [(ByteString, ByteString)]
 
-commands :: M.Map ByteString (CommandArgs -> ByteString -> TemplateState -> IO TemplateState)
+commands :: M.Map ByteString (CommandArgs -> ByteString -> (ByteString -> TemplateState -> IO TemplateState) -> TemplateState -> IO TemplateState)
 commands = M.fromList [
-      ("let", commandLet)
+      ("let",   commandLet)
     , ("apply", commandApply)
+    , ("var",   commandVar)
     ]
 
 -- TODO: most of these exceptions aren't actually being thrown.  That will have to be dealt with at some point
@@ -52,7 +53,7 @@ parseCommand comm write state = let (command, rest) = breakCommand comm in
         toPairs c  (k:v:r) = (k,v): toPairs c r
         processCommand c (args, content, rest) = do
             let f = fromMaybe parseFail . M.lookup c $ commands
-            state' <- f args content state
+            state' <- f args content write state
             processContents rest write state'
             where
                 parseFail = error $ "parse fail: templied called undefined command: '" ++ B8.unpack c ++ "'"
@@ -82,10 +83,8 @@ applyTemplate template (root, current, prev, vars) = do
 
 -- commands
 
--- TODO: This needs to actually look up the template file and apply it with the new var's (i.e. right before the return statement)
--- TODO: Looks like applyTemplate can work but then we need a way of passing current and root down to the commands since every new search starts at the top  (maybe make a "state" variable that has vars, current, root and so on.  Maybe a module representing the template engine)
-commandApply :: CommandArgs -> ByteString -> TemplateState -> IO TemplateState
-commandApply args content state = do
+commandApply :: CommandArgs -> ByteString -> (ByteString -> TemplateState -> IO TemplateState) -> TemplateState -> IO TemplateState
+commandApply args content _ state = do
     let template = tryAttrLookup "apply" "template" args
     s' <- processContents content write state
     s'' <- applyTemplate (B8.unpack template) s'
@@ -95,9 +94,17 @@ commandApply args content state = do
             write "" s = return s
             write s (r, c, l, v)  = return $ (r, c, l, M.insertWith (flip B8.append) Content s v)
 
-commandLet :: CommandArgs -> ByteString -> TemplateState -> IO TemplateState
-commandLet args content (r, c, l, vars) = let name = tryAttrLookup "let" "name" args in
+-- TODO: We actually need to process contents before inserting them as the variable
+commandLet :: CommandArgs -> ByteString -> (ByteString -> TemplateState -> IO TemplateState) -> TemplateState -> IO TemplateState
+commandLet args content _ (r, c, l, vars) = let name = tryAttrLookup "let" "name" args in
     return $ (r, c, l, M.insert (Var name) content vars)
+
+commandVar :: CommandArgs -> ByteString -> (ByteString -> TemplateState -> IO TemplateState) -> TemplateState -> IO TemplateState
+commandVar args _ write s@(_, _, _, vars) = let
+    name = tryAttrLookup "var" "name" args
+    value = fromMaybe "" $ M.lookup (Var name) vars
+    in
+        write value s
 
 tryAttrLookup :: String -> ByteString -> CommandArgs -> ByteString
 tryAttrLookup tag name args = fromMaybe parseFail . L.lookup name $ args
