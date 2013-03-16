@@ -7,7 +7,7 @@ where
 import Data.ByteString as B
 import Data.ByteString.Char8 as B8
 import System.IO (stderr)
-import System.FilePath ((</>), takeDirectory, splitFileName)
+import System.FilePath ((</>), takeDirectory, splitFileName, dropTrailingPathSeparator)
 import System.Directory (doesFileExist)
 import Data.Map as M
 import Data.List as L
@@ -73,7 +73,7 @@ applyTemplate template (root, current, prev, vars) = do
         upDir dir = takeDirectory dir
         current' = let (dir, file) = splitFileName prev in
             if file == template
-            then upDir dir
+            then upDir . dropTrailingPathSeparator $ dir
             else current
         write "" v = return v
         write s v = do
