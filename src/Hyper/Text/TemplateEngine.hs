@@ -17,14 +17,14 @@ type VariableMap = M.Map Variable ByteString
 
 type CommandArgs = [(ByteString, ByteString)]
 
-commands :: M.Map ByteString (CommandArgs -> ByteString -> VariableMap -> VariableMap)
+commands :: M.Map ByteString (CommandArgs -> ByteString -> VariableMap -> IO VariableMap)
 commands = M.fromList [
       ("let", commandLet)
     , ("apply", commandApply)
     ]
 
 -- TODO: most of these exceptions aren't actually being thrown.  That will have to be dealt with at some point
-processFileContents :: ByteString -> (ByteString -> IO ()) -> VariableMap -> IO (VariableMap)
+processFileContents :: ByteString -> (ByteString -> IO ()) -> VariableMap -> IO VariableMap
 processFileContents contents write vars = breakFileContents contents
     where
         process (static, command) = do
@@ -48,10 +48,11 @@ processFileContents contents write vars = breakFileContents contents
         toPairs c  (k:v:r) = (k,v): toPairs c r
         processCommand c (args, content, rest) = do
             let f = fromMaybe parseFail . M.lookup c $ commands
-            vars' <- processFileContents rest write vars
-            return $ f args content vars'
+            vars' <- f args content vars
+            processFileContents rest write vars'
+
             where
-                parseFail = error $ "parse fail: templied tried to use undefined command: '" ++ B8.unpack c ++ "'"
+                parseFail = error $ "parse fail: templied called undefined command: '" ++ B8.unpack c ++ "'"
 
 
 --B8.hPutStrLn stderr $ B8.concat [
@@ -77,15 +78,21 @@ applyTemplate template current root vars = do
 
 -- commands
 
-commandApply :: CommandArgs -> ByteString -> VariableMap -> VariableMap
-commandApply args content vars = let template = tryAttrLookup "apply" "template" args in
-    vars
+commandApply :: CommandArgs -> ByteString -> VariableMap -> IO VariableMap
+commandApply args content vars = do
+    let template = tryAttrLookup "apply" "template" args
+    vars' <- processFileContents content write vars
+    return $
+        vars'
+        where
+            write "" = return ()
+            write s = B8.hPutStrLn stderr $ "writing to cache from apply: '" `B8.append` s `B8.append` "'"
 
-commandLet :: CommandArgs -> ByteString -> VariableMap -> VariableMap
+commandLet :: CommandArgs -> ByteString -> VariableMap -> IO VariableMap
 commandLet args content vars = let name = tryAttrLookup "let" "name" args in
-    M.insert (Var name) content vars
+    return $ M.insert (Var name) content vars
 
 tryAttrLookup :: String -> ByteString -> CommandArgs -> ByteString
-tryAttrLookup tag name args = fromMaybe parseFail . L.lookup "template" $ args
+tryAttrLookup tag name args = fromMaybe parseFail . L.lookup name $ args
     where
         parseFail = error $ "parse fail: " ++ tag ++ " missing required attribute: " ++ B8.unpack name
