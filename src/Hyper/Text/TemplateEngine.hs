@@ -41,8 +41,12 @@ parseCommand comm write state = let (command, rest) = breakCommand comm in
     where
         parseArgs c a = let
             (args, rest) = breakEndTag a
-            (content, rest') = breakCloseTag c rest in
-            (processArgs c args, content, dropCommand c rest')
+            closed = B8.last args == '/'
+            (content, rest') =  if  closed
+                                then ("", rest)
+                                else breakCloseTag c rest
+            in
+                (processArgs c args, content, if closed then B8.drop 1 rest' else dropCommand c rest')
         processArgs com = toPairs com . Prelude.filter (not . B8.null) . B8.splitWith (\c -> c == ' ' || c == '=' || c == '"')
         breakCommand = B8.break (== ' ') . B8.drop 7
         breakEndTag = B8.break (== '>')
