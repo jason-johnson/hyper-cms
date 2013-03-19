@@ -99,7 +99,6 @@ commandApply args content _ state = do
     return $
         s''
         where
-            write "" s = return s
             write s (r, c, l, v)  = return $ (r, c, l, M.insertWith (flip B8.append) Content s v)
 
 commandLet :: CommandArgs -> ByteString -> (ByteString -> TemplateState -> IO TemplateState) -> TemplateState -> IO TemplateState
