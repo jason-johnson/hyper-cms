@@ -13,7 +13,10 @@ import Data.Map as M
 import Data.List as L
 import Data.Maybe (fromMaybe)
 
-data Variable = Content | Var ByteString deriving (Eq, Ord, Show)
+data Variable   = Content
+                | Clipboard
+                | Var ByteString
+                deriving (Eq, Ord, Show)
 type VariableMap = M.Map Variable ByteString
 
 type TemplateState = (String, String, String, VariableMap)
@@ -99,10 +102,14 @@ commandApply args content _ state = do
             write "" s = return s
             write s (r, c, l, v)  = return $ (r, c, l, M.insertWith (flip B8.append) Content s v)
 
--- TODO: We actually need to process contents before inserting them as the variable
 commandLet :: CommandArgs -> ByteString -> (ByteString -> TemplateState -> IO TemplateState) -> TemplateState -> IO TemplateState
-commandLet args content _ (r, c, l, vars) = let name = tryAttrLookup "let" "name" args in
-    return $ (r, c, l, M.insert (Var name) content vars)
+commandLet args content _ state@(r, c, l, vars) = do
+    let name = tryAttrLookup "let" "name" args
+    (_, _, _, vars') <- processContents content write state
+    return $ (r, c, l, M.insert (Var name) (content' vars') vars)
+    where
+        content' v = fromMaybe "" $ M.lookup Clipboard v
+        write s (r', c', l', v) = return $ (r', c', l', M.insertWith (flip B8.append) Clipboard s v)
 
 commandVar :: CommandArgs -> ByteString -> (ByteString -> TemplateState -> IO TemplateState) -> TemplateState -> IO TemplateState
 commandVar args _ write s@(_, _, _, vars) = let
