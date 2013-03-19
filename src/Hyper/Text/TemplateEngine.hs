@@ -58,7 +58,7 @@ parseCommand comm write state = let (command, rest) = breakCommand comm in
         dropCommand c = B8.drop $ 9 + B8.length c
         toPairs _ [] = []
         toPairs c [x] = error $ "parse error in tag '" ++ B8.unpack c ++ "' attribute '" ++ B8.unpack x ++ "' has no value"
-        toPairs c  (k:v:r) = (k,v): toPairs c r
+        toPairs c  (k:v:r) = (k,v) : toPairs c r
         processCommand c (args, content, rest) = do
             let f = fromMaybe parseFail . M.lookup c $ commands
             state' <- f args content write state
