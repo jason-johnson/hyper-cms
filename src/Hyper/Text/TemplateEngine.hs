@@ -19,8 +19,9 @@ type VariableMap = M.Map Variable ByteString
 type TemplateState = (String, String, String, VariableMap)
 
 type CommandArgs = [(ByteString, ByteString)]
+type CommandMap = M.Map ByteString (CommandArgs -> ByteString -> (ByteString -> TemplateState -> IO TemplateState) -> TemplateState -> IO TemplateState)
 
-commands :: M.Map ByteString (CommandArgs -> ByteString -> (ByteString -> TemplateState -> IO TemplateState) -> TemplateState -> IO TemplateState)
+commands :: CommandMap
 commands = M.fromList [
       ("let",   commandLet)
     , ("apply", commandApply)
