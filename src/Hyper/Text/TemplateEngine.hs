@@ -115,10 +115,7 @@ applyTemplate template state = do
 commandApply :: CommandArgs -> ByteString -> (ByteString -> TemplateState -> IO TemplateState) -> TemplateState -> IO TemplateState
 commandApply args content _ state = do
     let template = tryAttrLookup "apply" "template" args
-    s' <- processContents content write state
-    s'' <- applyTemplate (B8.unpack template) s'
-    return $
-        s''
+    processContents content write state >>= applyTemplate (B8.unpack template)
         where
             write s st  = return $ st { variables = M.insertWith (flip B8.append) Content s . variables $ st }
 
