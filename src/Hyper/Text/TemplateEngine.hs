@@ -1,6 +1,7 @@
 module Hyper.Text.TemplateEngine
 (
   applyTemplate
+, defaultCommands
 )
 where
 
@@ -19,13 +20,34 @@ data Variable   = Content
                 deriving (Eq, Ord, Show)
 type VariableMap = M.Map Variable ByteString
 
-type TemplateState = (String, String, String, VariableMap)
+data TemplateState = TemplateState {
+      root          :: String
+    , location      :: String
+    , templateFile  :: String
+    , commands      :: CommandMap
+    , variables     :: VariableMap
+    }
+
+instance Show (TemplateState) where
+    show s = L.concat [
+        "TemplateState { root = ",
+        show . root $ s,
+        ", location = ",
+        show . location $ s,
+        ", templateFile = ",
+        show . templateFile $ s,
+        ", commands = ",
+        show . M.keys . commands $ s,
+        ", variables = ",
+        show . variables $ s,
+        " }"
+        ]
 
 type CommandArgs = [(ByteString, ByteString)]
 type CommandMap = M.Map ByteString (CommandArgs -> ByteString -> (ByteString -> TemplateState -> IO TemplateState) -> TemplateState -> IO TemplateState)
 
-commands :: CommandMap
-commands = M.fromList [
+defaultCommands :: CommandMap
+defaultCommands = M.fromList [
       ("let",   commandLet)
     , ("apply", commandApply)
     , ("var",   commandVar)
@@ -60,30 +82,29 @@ parseCommand comm write state = let (command, rest) = breakCommand comm in
         toPairs c [x] = error $ "parse error in tag '" ++ B8.unpack c ++ "' attribute '" ++ B8.unpack x ++ "' has no value"
         toPairs c  (k:v:r) = (k,v) : toPairs c r
         processCommand c (args, content, rest) = do
-            let f = fromMaybe parseFail . M.lookup c $ commands
+            let f = fromMaybe parseFail . M.lookup c $ commands state
             state' <- f args content write state
             processContents rest write state'
             where
                 parseFail = error $ "parse fail: templied called undefined command: '" ++ B8.unpack c ++ "'"
 
 applyTemplate :: FilePath -> TemplateState -> IO TemplateState
-applyTemplate template (root, current, prev, vars) = do
+applyTemplate template state = do
     path <- findFile current'
     c <- B8.readFile path
-    state' <- processContents c write (root, current, path, vars)
     B8.hPutStrLn stderr $ "state is: " `B8.append` B8.pack (show state')
-    return state'
+    processContents c write $ state { templateFile = path }
     where
         findFile c = do
-            let path = root </> c </> template
+            let path = root state </> c </> template
             exists <- doesFileExist path
             if exists then return path else findFile (upDir c)
         upDir "." = error $ "template file: " ++ template ++ " not found"
         upDir dir = takeDirectory dir
-        current' = let (dir, file) = splitFileName prev in
+        current' = let (dir, file) = splitFileName (templateFile state) in
             if file == template
             then upDir . dropTrailingPathSeparator $ dir
-            else current
+            else location state
         write "" v = return v
         write s v = do
             B8.hPutStrLn stderr $ "writing to cache: '" `B8.append` s `B8.append` "'"
@@ -99,21 +120,21 @@ commandApply args content _ state = do
     return $
         s''
         where
-            write s (r, c, l, v)  = return $ (r, c, l, M.insertWith (flip B8.append) Content s v)
+            write s st  = return $ st { variables = M.insertWith (flip B8.append) Content s . variables $ st }
 
 commandLet :: CommandArgs -> ByteString -> (ByteString -> TemplateState -> IO TemplateState) -> TemplateState -> IO TemplateState
-commandLet args content _ state@(r, c, l, vars) = do
+commandLet args content _ state = do
     let name = tryAttrLookup "let" "name" args
-    (_, _, _, vars') <- processContents content write state
-    return $ (r, c, l, M.insert (Var name) (content' vars') vars)
+    state'@TemplateState {variables = vars'} <- processContents content write state
+    return $ state' { variables = M.insert (Var name) (content' vars') vars' }
     where
         content' v = fromMaybe "" $ M.lookup Clipboard v
-        write s (r', c', l', v) = return $ (r', c', l', M.insertWith (flip B8.append) Clipboard s v)
+        write s st = return $ st { variables = M.insertWith (flip B8.append) Clipboard s . variables $ st }
 
 commandVar :: CommandArgs -> ByteString -> (ByteString -> TemplateState -> IO TemplateState) -> TemplateState -> IO TemplateState
-commandVar args _ write s@(_, _, _, vars) = let
-    name = tryAttrLookup "var" "name" args
-    value = fromMaybe "" $ M.lookup (Var name) vars
+commandVar args _ write s = let
+    name    = tryAttrLookup "var" "name" args
+    value   = fromMaybe "" $ M.lookup (Var name) . variables $ s
     in
         write value s
 
