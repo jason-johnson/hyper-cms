@@ -100,10 +100,10 @@ applyTemplate template state = do
             exists <- doesFileExist path
             if exists then return path else findFile (upDir c)
         upDir "." = error $ "template file: " ++ template ++ " not found"
-        upDir dir = takeDirectory dir
+        upDir dir = takeDirectory . dropTrailingPathSeparator $ dir
         current' = let (dir, file) = splitFileName (templateFile state) in
             if file == template
-            then upDir . dropTrailingPathSeparator $ dir
+            then upDir dir
             else location state
         write "" v = return v
         write s v = do
