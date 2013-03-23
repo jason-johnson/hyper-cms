@@ -120,9 +120,9 @@ commandApply args content _ state = do
             write s st  = return $ st { variables = M.insertWith (flip B8.append) Content s . variables $ st }
 
 commandLet :: CommandArgs -> ByteString -> (ByteString -> TemplateState -> IO TemplateState) -> TemplateState -> IO TemplateState
-commandLet args content _ state = do
+commandLet args content _ state@TemplateState { variables = vars } = do
     let name = tryAttrLookup "let" "name" args
-    state'@TemplateState {variables = vars'} <- processContents content write state
+    state'@TemplateState {variables = vars'} <- processContents content write state { variables = M.delete Clipboard vars }
     return $ state' { variables = M.insert (Var name) (content' vars') vars' }
     where
         content' v = fromMaybe "" $ M.lookup Clipboard v
