@@ -50,7 +50,7 @@ instance Show (TemplateState) where
         ]
 
 type CommandArgs = M.Map X.Name Text
-type Command = TemplateState -> CommandArgs -> [X.Node] -> IO (Maybe X.Element, TemplateState)
+type Command = TemplateState -> CommandArgs -> [X.Node] -> IO ([X.Node], TemplateState)
 type CommandMap = M.Map Text Command
 
 defaultCommands :: CommandMap
@@ -78,34 +78,33 @@ applyTemplate template state = do
             then upDir dir
             else location state
         makeDoc p e r = X.Document p r e
-        maybeDoc p e = fmap (makeDoc p e) . fst
-        applyTemplate' (X.Document p r e) = fmap (maybeDoc p e) . processElement r
+        maybeDoc p e = fmap $ makeDoc p e
+        unwrap ([X.NodeElement e], _) = Just e
+        unwrap nodes = error $ "malformed document received: '" ++ show nodes ++ "' called in template: " ++ (show . templateFile) state
+        applyTemplate' (X.Document p r e) = fmap (maybeDoc p e . unwrap) . processElement r
 
 -- TODO: Should we be looking at adding State monad in here instead of manually handling state?  It would mean a transformer I think
-processElement :: X.Element -> TemplateState -> IO (Maybe X.Element, TemplateState)
+processElement :: X.Element -> TemplateState -> IO ([X.Node], TemplateState)
 processElement (X.Element eName attrs children) state = do
     (children', state') <- foldM pn ([], state) children
-    let children'' = L.reverse children'
     case eName of
-        (X.Name {nameLocalName = name, namePrefix = Just "hyper" }) -> dispatch name state' attrs children''
-        _                                                           -> return (Just $ X.Element eName attrs children'', state')
+        (X.Name {nameLocalName = name, namePrefix = Just "hyper" }) -> dispatch name state' attrs children'
+        _                                                           -> return ([X.NodeElement $ X.Element eName attrs children'], state')
     where
         pn (cs, s) c = do
-            (c', s') <- processNode c s
-            return (consMaybe c' cs, s')
+            (cs', s') <- processNode c s
+            return (cs ++ cs', s')
         dispatch name s = dispatch' name s s
         dispatch' name = fromMaybe (failFun name) . M.lookup name . commands
         failFun name = error $ "unknown command: " ++ show name ++ " called in template: " ++ (show . templateFile) state
-        consMaybe (Just c) cs = c : cs
-        consMaybe Nothing cs = cs
 
-processNode :: X.Node -> TemplateState -> IO (Maybe X.Node, TemplateState)
+processNode :: X.Node -> TemplateState -> IO ([X.Node], TemplateState)
 processNode (X.NodeElement e) state = do
-    (e', state') <- processElement e state
-    return (fmap X.NodeElement e', state')
-processNode c@(X.NodeContent _) s = return (Just c, s)
-processNode c@(X.NodeComment _) s = return (Just c, s)
-processNode (X.NodeInstruction _) s = return (Nothing, s)
+    (es, state') <- processElement e state
+    return (es, state')              -- Maybe it should be up to the commands to return exactly the Node they want to return
+processNode c@(X.NodeContent _) s = return ([c], s)
+processNode c@(X.NodeComment _) s = return ([c], s)
+processNode (X.NodeInstruction _) s = return ([], s)
 
 -- commands
 
@@ -116,7 +115,7 @@ commandLet state@(TemplateState { variables = vars }) args children = commandLet
         parseArgs name [] = name
         parseArgs _ ((X.Name {nameLocalName = "name"}, n):rest) = parseArgs n rest
         parseArgs _ ((X.Name {nameLocalName = attr}, _):_) = error $ "let command recieved invalid attribute: " ++ show attr ++ " in file " ++ (show . templateFile) state
-        commandLet' name = return (Nothing, state { variables = M.insert (Var name) children vars })
+        commandLet' name = return ([], state { variables = M.insert (Var name) children vars })
 
 commandApply :: Command
 commandApply state@(TemplateState { variables = vars }) args children = commandApply' args'
@@ -125,12 +124,13 @@ commandApply state@(TemplateState { variables = vars }) args children = commandA
         parseArgs template [] = T.unpack template
         parseArgs _ ((X.Name {nameLocalName = "template"}, t):rest) = parseArgs t rest
         parseArgs _ ((X.Name {nameLocalName = attr}, _):_) = error $ "apply command recieved invalid attribute: " ++ show attr ++ " in file " ++ (show . templateFile) state
-        getRoot (X.Document _ r _) = r
+        getRoot (Just (X.Document _ r _)) = [X.NodeElement r]
+        getRoot Nothing = []
         commandApply' template = do
             B8.hPutStr stderr . (B8.append "state: ") . B8.pack . show $ state
             B8.hPutStrLn stderr . (B8.append ", children: ") . B8.pack . show $ children
             doc <- applyTemplate template state { variables = M.insert Content children vars }
-            return (fmap getRoot doc, state)
+            return (getRoot doc, state)
 
 commandVar :: Command
 commandVar state@(TemplateState { variables = vars }) args [] = commandVar' args'
@@ -140,13 +140,14 @@ commandVar state@(TemplateState { variables = vars }) args [] = commandVar' args
         parseArgs (_,dw) ((X.Name {nameLocalName = "name"}, n):rest) = parseArgs (n,dw) rest
         parseArgs (n,_) ((X.Name {nameLocalName = "div-wrap"}, dw):rest) = parseArgs (n,T.toLower dw) rest
         parseArgs _ ((X.Name {nameLocalName = attr}, _):_) = error $ "var command recieved invalid attribute: " ++ show attr ++ " in file " ++ (show . templateFile) state
-        makeDiv wrap name cs = X.Element (X.Name "div" Nothing Nothing) (attrs wrap name) cs
-        attrs "false" _ = mempty
-        attrs "true" name = M.singleton "id" name
-        attrs val _ = error $ "var command, div-wrap attributed set with unexpected value: '" ++ show val ++ "' in file " ++ (show . templateFile) state
-        commandVar' (name, wrap) = return (fmap (makeDiv wrap name) $ M.lookup (Var name) vars, state)                                                      -- TODO: note, this will cause missing vars to simply return nothing instead of fail.  Is that ok?
+        makeNode _ _ Nothing = []
+        makeNode "true" name (Just cs) = [X.NodeElement $ X.Element (X.Name "div" Nothing Nothing) (M.singleton "id" name) cs]
+        makeNode "false" _ (Just cs) = cs
+        makeNode val _ _ = error $ "var command, div-wrap attributed set with unexpected value: '" ++ show val ++ "' in file " ++ (show . templateFile) state
+        commandVar' (name, wrap) = return (makeNode wrap name $ M.lookup (Var name) vars, state)                                                      -- TODO: note, this will cause missing vars to simply return nothing instead of fail.  Is that ok?
 commandVar state _ children = error $ "var command malformed, unexpected children: '" ++ show children ++ "' in file " ++ (show . templateFile) state
 
+-- TODO: This command should probably accept the name to use as the div
 commandContent :: Command
 commandContent state@(TemplateState { variables = vars }) args [] = commandContent' args'
     where
@@ -154,11 +155,11 @@ commandContent state@(TemplateState { variables = vars }) args [] = commandConte
         parseArgs wrap [] = wrap
         parseArgs _ ((X.Name {nameLocalName = "div-wrap"}, dw):rest) = parseArgs (T.toLower dw) rest
         parseArgs _ ((X.Name {nameLocalName = attr}, _):_) = error $ "content command recieved invalid attribute: " ++ show attr ++ " in file " ++ (show . templateFile) state
-        makeDiv wrap cs = X.Element (X.Name "div" Nothing Nothing) (attrs wrap) cs
-        attrs "false" = mempty
-        attrs "true" = M.singleton "id" "content"
-        attrs val = error $ "content command, div-wrap attributed set with unexpected value: '" ++ show val ++ "' in file " ++ (show . templateFile) state
-        commandContent' wrap = return (fmap (makeDiv wrap) $ M.lookup Content vars, state)
+        makeNode _ Nothing = []
+        makeNode "true" (Just cs) = [X.NodeElement $ X.Element (X.Name "div" Nothing Nothing) (M.singleton "id" "content") cs]
+        makeNode "false" (Just cs) = cs
+        makeNode val _ = error $ "content command, div-wrap attributed set with unexpected value: '" ++ show val ++ "' in file " ++ (show . templateFile) state
+        commandContent' wrap = return (makeNode wrap $ M.lookup Content vars, state)
 commandContent state _ children = error $ "content command malformed, unexpected children: '" ++ show children ++ "' in file " ++ (show . templateFile) state
 
 -- helpers
