@@ -110,14 +110,14 @@ processNode (X.NodeInstruction _) s = return (Nothing, s)
 -- commands
 
 commandLet :: Command
-commandLet state@(TemplateState { variables = vars }) args nodes = do
+commandLet state@(TemplateState { variables = vars }) args children = do
     commandLet' args'
     where
         args' = parseArgs "" . M.toList $ args
         parseArgs name [] = name
         parseArgs _ ((X.Name {nameLocalName = "name"}, n):rest) = parseArgs n rest
         parseArgs _ ((X.Name {nameLocalName = attr}, _):_) = error $ "let command recieved invalid attribute: " ++ show attr ++ " in file " ++ (show . templateFile) state
-        commandLet' name = return (Nothing, state { variables = M.insert (Var name) nodes vars })
+        commandLet' name = return (Nothing, state { variables = M.insert (Var name) children vars })
 
 commandApply :: Command
 commandApply state _args children = do
