@@ -44,7 +44,8 @@ instance Show (TemplateState) where
         ]
 
 type CommandArgs = [(ByteString, ByteString)]
-type CommandMap = M.Map ByteString (CommandArgs -> ByteString -> (ByteString -> TemplateState -> IO TemplateState) -> TemplateState -> IO TemplateState)
+type Command = (CommandArgs -> ByteString -> (ByteString -> TemplateState -> IO TemplateState) -> TemplateState -> IO TemplateState)
+type CommandMap = M.Map ByteString Command
 
 defaultCommands :: CommandMap
 defaultCommands = M.fromList [
