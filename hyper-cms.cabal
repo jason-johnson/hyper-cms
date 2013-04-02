@@ -18,6 +18,7 @@ executable hyper-cms
                    filepath,
                    directory,
                    xml-conduit,
+                   text
   ghc-options:     -Wall
   extensions:      OverloadedStrings
   other-modules:   
