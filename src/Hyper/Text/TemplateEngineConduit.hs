@@ -124,3 +124,8 @@ commandApply state _args children = do
     B8.hPutStr stderr . (B8.append "state: ") . B8.pack . show $ state
     B8.hPutStrLn stderr . (B8.append ", children: ") . B8.pack . show $ children
     error "commandApply not yet implemented"
+
+-- helpers
+
+parseAttrs :: (a -> [(X.Name, Text)] -> b) -> a -> Map X.Name Text -> b
+parseAttrs p s = p s . M.toList
