@@ -111,7 +111,7 @@ commandLet :: Command
 commandLet state@(TemplateState { variables = vars }) args children = do
     commandLet' args'
     where
-        args' = parseArgs "" . M.toList $ args
+        args' = parseAttrs parseArgs "" args
         parseArgs name [] = name
         parseArgs _ ((X.Name {nameLocalName = "name"}, n):rest) = parseArgs n rest
         parseArgs _ ((X.Name {nameLocalName = attr}, _):_) = error $ "let command recieved invalid attribute: " ++ show attr ++ " in file " ++ (show . templateFile) state
