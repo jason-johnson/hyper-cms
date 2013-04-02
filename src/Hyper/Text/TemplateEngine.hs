@@ -13,6 +13,11 @@ import System.Directory (doesFileExist)
 import Data.Map as M
 import Data.List as L
 import Data.Maybe (fromMaybe)
+import Debug.Trace (trace)
+
+debug :: c -> String -> c
+--debug = flip trace
+debug x _ = x
 
 data Variable   = Content
                 | Clipboard
@@ -54,7 +59,7 @@ defaultCommands = M.fromList [
     , ("var",   commandVar)
     ]
 
--- TODO: most of these exceptions aren't actually being thrown.  That will have to be dealt with at some point
+-- TODO: most of these exceptions aren't actually being thrown.  That will have to be dealt with at some point.  This happens because the code isn't running to the point of the exception (e.g. not all attributes are parsed so the exception isn't hit)
 processContents :: ByteString -> (ByteString -> TemplateState -> IO TemplateState) -> TemplateState -> IO TemplateState
 processContents contents write state = do
     let (static, command) = B8.breakSubstring "<hyper:" contents
@@ -80,25 +85,27 @@ parseCommand comm write state = let (command, rest) = breakCommand comm in
         breakCloseTag c = B8.breakSubstring ("</hyper:" `B8.append` c `B8.append` ">") . B8.drop 1
         dropCommand c = B8.drop $ 9 + B8.length c
         toPairs _ [] = []
-        toPairs c [x] = error $ "parse error in tag '" ++ B8.unpack c ++ "' attribute '" ++ B8.unpack x ++ "' has no value"
+        toPairs c [x] = error $ templateFile state ++ ": parse error in tag '" ++ B8.unpack c ++ "' attribute '" ++ B8.unpack x ++ "' has no value"
         toPairs c  (k:v:r) = (k,v) : toPairs c r
         processCommand c (args, content, rest) = do
             let f = fromMaybe parseFail . M.lookup c $ commands state
             state' <- f args content write state
             processContents rest write state'
             where
-                parseFail = error $ "parse fail: templied called undefined command: '" ++ B8.unpack c ++ "'"
+                parseFail = error $ templateFile state ++ ": parse fail: templied called undefined command: '" ++ B8.unpack c ++ "'"
 
 applyTemplate :: FilePath -> TemplateState -> IO TemplateState
 applyTemplate template state = do
     path <- findFile current'
+--    B8.hPutStrLn stderr $ "about to read file: '" `B8.append` B8.pack path `B8.append` "'"
+--    jason <- B8.getLine
+--    B8.hPutStrLn stderr jason
     c <- B8.readFile path
-    B8.hPutStrLn stderr $ "state is: " `B8.append` B8.pack (show state')
-    processContents c write $ state { templateFile = path }
+    processContents c write $ state { templateFile = path, commands = M.insert "content" cc $ commands state }
     where
         findFile c = do
             let path = root state </> c </> template
-            exists <- doesFileExist path
+            exists <- doesFileExist $ path `debug` ("trying path: " ++ path)
             if exists then return path else findFile (upDir c)
         upDir "." = error $ "template file: " ++ template ++ " not found"
         upDir dir = takeDirectory . dropTrailingPathSeparator $ dir
@@ -110,24 +117,33 @@ applyTemplate template state = do
         write s v = do
             B8.hPutStrLn stderr $ "writing to cache: '" `B8.append` s `B8.append` "'"
             return v
+        cc _ _ w s@TemplateState { variables = v } = w (fromMaybe "NO CONTENT" $ M.lookup Content v) s 
 
 -- commands
 
+-- TODO: commands should actually be held in the state variable so that invoked commands can temporarily override them
+-- TODO: commandApply should make a command "content" that applies what is in the Content variable (no other way to access it)
+-- TODO: commandApply should clear the content variable as a first step.  However, in the case of a base call (template calling another of its same name) we should probably overwrite the content command to use the previous content.  In fact, maybe that's how it always works
+-- TODO: In fact, if commandApply simply keeps the "content" command it receives and only overwrites it before returning state then we don't have to do this bookkeeping, everything should work as intended
+
 commandApply :: CommandArgs -> ByteString -> (ByteString -> TemplateState -> IO TemplateState) -> TemplateState -> IO TemplateState
-commandApply args content _ state = do
+commandApply args content _ state@TemplateState { variables = vars, commands = comms } = do
     let template = tryAttrLookup "apply" "template" args
-    processContents content write state >>= applyTemplate (B8.unpack template)
+        pc = M.lookup Content $ vars
+    processContents content write state { variables = M.delete Content vars, commands = M.insert "content" (content' pc) comms } >>= applyTemplate (B8.unpack template)
         where
-            write s st  = return $ st { variables = M.insertWith (flip B8.append) Content s . variables $ st }
+            write s st  = return $ st { variables = M.insertWith (flip B8.append) Content s . variables $ st } `debug` ("** SETTING content to be: '" ++ B8.unpack s ++ "'")
+            content' (Just pc) _ c w s = debug (w pc s) ("CONTENT WAS CALLED with content: '" ++ B8.unpack c ++ "' and prev: '" ++ B8.unpack pc ++ "'")
+            content' Nothing _ _ _ _ = error $ templateFile state ++ ": parse fail: uninitialized content used"
 
 commandLet :: CommandArgs -> ByteString -> (ByteString -> TemplateState -> IO TemplateState) -> TemplateState -> IO TemplateState
 commandLet args content _ state@TemplateState { variables = vars } = do
     let name = tryAttrLookup "let" "name" args
     state'@TemplateState {variables = vars'} <- processContents content write state { variables = M.delete Clipboard vars }
-    return $ state' { variables = M.insert (Var name) (content' vars') vars' }
+    return $ state' { variables = M.insert (Var name) (content' vars') vars' } `debug` ("vars are " ++ show vars' ++ " after let")
     where
         content' v = fromMaybe "" $ M.lookup Clipboard v
-        write s st = return $ st { variables = M.insertWith (flip B8.append) Clipboard s . variables $ st }
+        write s st = return $ st { variables = M.insertWith (flip B8.append) Clipboard s . variables $ st } `debug` ("++++ SETTING let with: '" ++ B8.unpack s ++ "'")
 
 commandVar :: CommandArgs -> ByteString -> (ByteString -> TemplateState -> IO TemplateState) -> TemplateState -> IO TemplateState
 commandVar args _ write s = let
@@ -135,6 +151,8 @@ commandVar args _ write s = let
     value   = fromMaybe "" $ M.lookup (Var name) . variables $ s
     in
         write value s
+
+-- helpers 
 
 tryAttrLookup :: String -> ByteString -> CommandArgs -> ByteString
 tryAttrLookup tag name args = fromMaybe parseFail . L.lookup name $ args
