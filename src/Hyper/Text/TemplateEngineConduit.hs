@@ -5,20 +5,20 @@ module Hyper.Text.TemplateEngineConduit
 )
 where
 
-import System.FilePath ((</>), takeDirectory, splitFileName, dropTrailingPathSeparator)
-import System.Directory (doesFileExist)
-import Data.Maybe (fromMaybe)
-import System.IO (stderr)
-import Data.ByteString.Char8 as B8
-import Data.Map as M
-import Data.List as L
-import qualified Text.XML as X
-import Text.XML (nameLocalName, namePrefix)
-import Data.String (fromString)
-import Control.Monad (foldM)
-import Data.Text (Text)
-import qualified Data.Text as T
-import Data.Monoid (mempty)
+import           Control.Monad         (foldM)
+import           Data.ByteString.Char8 as B8
+import           Data.List             as L
+import           Data.Map              as M
+import           Data.Maybe            (fromMaybe)
+import           Data.String           (fromString)
+import           Data.Text             (Text)
+import qualified Data.Text             as T
+import           System.Directory      (doesFileExist)
+import           System.FilePath       (dropTrailingPathSeparator,
+                                        splitFileName, takeDirectory, (</>))
+import           System.IO             (stderr)
+import           Text.XML              (nameLocalName, namePrefix)
+import qualified Text.XML              as X
 
 data Variable   = Content
                 | Clipboard
@@ -27,11 +27,11 @@ data Variable   = Content
 type VariableMap = M.Map Variable [X.Node]
 
 data TemplateState = TemplateState {
-      root          :: String
-    , location      :: String
-    , templateFile  :: String
-    , commands      :: CommandMap
-    , variables     :: VariableMap
+      root         :: String
+    , location     :: String
+    , templateFile :: String
+    , commands     :: CommandMap
+    , variables    :: VariableMap
     }
 
 instance Show (TemplateState) where
