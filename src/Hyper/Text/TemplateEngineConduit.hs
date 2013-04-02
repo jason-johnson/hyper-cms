@@ -58,6 +58,7 @@ defaultCommands = M.fromList [
       ("let",   commandLet)
     , ("apply", commandApply)
     , ("var", commandVar)
+    , ("content", commandContent)
     ]
 
 applyTemplate :: FilePath -> TemplateState -> IO (Maybe X.Document)
@@ -147,6 +148,20 @@ commandVar state@(TemplateState { variables = vars }) args [] = commandVar' args
         attrs val _ = error $ "var command, div-wrap attributed set with unexpected value: '" ++ show val ++ "' in file " ++ (show . templateFile) state
         commandVar' (name, wrap) = return (fmap (makeDiv wrap name) $ M.lookup (Var name) vars, state)
 commandVar state _ children = error $ "var command malformed, unexpected children: '" ++ show children ++ "' in file " ++ (show . templateFile) state
+
+commandContent :: Command
+commandContent state@(TemplateState { variables = vars }) args [] = commandContent' args'
+    where
+        args' = parseAttrs parseArgs "false" args
+        parseArgs wrap [] = wrap
+        parseArgs _ ((X.Name {nameLocalName = "div-wrap"}, dw):rest) = parseArgs (T.toLower dw) rest
+        parseArgs _ ((X.Name {nameLocalName = attr}, _):_) = error $ "content command recieved invalid attribute: " ++ show attr ++ " in file " ++ (show . templateFile) state
+        makeDiv wrap cs = X.Element (X.Name "div" Nothing Nothing) (attrs wrap) cs
+        attrs "false" = mempty
+        attrs "true" = M.singleton "id" "content"
+        attrs val = error $ "content command, div-wrap attributed set with unexpected value: '" ++ show val ++ "' in file " ++ (show . templateFile) state
+        commandContent' wrap = return (fmap (makeDiv wrap) $ M.lookup Content vars, state)
+commandContent state _ children = error $ "content command malformed, unexpected children: '" ++ show children ++ "' in file " ++ (show . templateFile) state
 
 -- helpers
 
