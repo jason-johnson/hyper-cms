@@ -5,32 +5,33 @@ module Hyper.Text.TemplateEngine
 )
 where
 
-import Data.ByteString as B
-import Data.ByteString.Char8 as B8
-import System.IO (stderr)
-import System.FilePath ((</>), takeDirectory, splitFileName, dropTrailingPathSeparator)
-import System.Directory (doesFileExist)
-import Data.Map as M
-import Data.List as L
-import Data.Maybe (fromMaybe)
-import Debug.Trace (trace)
-
-debug :: c -> String -> c
---debug = flip trace
-debug x _ = x
+import           Control.Monad         (foldM)
+import           Data.ByteString.Char8 as B8
+import           Data.List             as L
+import           Data.Map              as M
+import           Data.Maybe            (fromMaybe)
+import           Data.String           (fromString)
+import           Data.Text             (Text)
+import qualified Data.Text             as T
+import           System.Directory      (doesFileExist)
+import           System.FilePath       (dropTrailingPathSeparator,
+                                        splitFileName, takeDirectory, (</>))
+import           System.IO             (stderr)
+import           Text.XML              (nameLocalName, namePrefix)
+import qualified Text.XML              as X
 
 data Variable   = Content
                 | Clipboard
-                | Var ByteString
+                | Var Text
                 deriving (Eq, Ord, Show)
-type VariableMap = M.Map Variable ByteString
+type VariableMap = M.Map Variable [X.Node]
 
 data TemplateState = TemplateState {
-      root          :: String
-    , location      :: String
-    , templateFile  :: String
-    , commands      :: CommandMap
-    , variables     :: VariableMap
+      root         :: String
+    , location     :: String
+    , templateFile :: String
+    , commands     :: CommandMap
+    , variables    :: VariableMap
     }
 
 instance Show (TemplateState) where
@@ -48,64 +49,27 @@ instance Show (TemplateState) where
         " }"
         ]
 
-type CommandArgs = [(ByteString, ByteString)]
-type Command = (CommandArgs -> ByteString -> (ByteString -> TemplateState -> IO TemplateState) -> TemplateState -> IO TemplateState)
-type CommandMap = M.Map ByteString Command
+type CommandArgs = M.Map X.Name Text
+type Command = TemplateState -> CommandArgs -> [X.Node] -> IO ([X.Node], TemplateState)
+type CommandMap = M.Map Text Command
 
 defaultCommands :: CommandMap
 defaultCommands = M.fromList [
       ("let",   commandLet)
     , ("apply", commandApply)
-    , ("var",   commandVar)
+    , ("var", commandVar)
+    , ("content", commandContent)
     ]
 
--- TODO: most of these exceptions aren't actually being thrown.  That will have to be dealt with at some point.  This happens because the code isn't running to the point of the exception (e.g. not all attributes are parsed so the exception isn't hit)
-processContents :: ByteString -> (ByteString -> TemplateState -> IO TemplateState) -> TemplateState -> IO TemplateState
-processContents contents write state = do
-    let (static, command) = B8.breakSubstring "<hyper:" contents
-    state' <- write static state
-    parseCommand command write state'
-
-parseCommand :: ByteString -> (ByteString -> TemplateState -> IO TemplateState) -> TemplateState -> IO TemplateState
-parseCommand "" _ vars = return vars
-parseCommand comm write state = let (command, rest) = breakCommand comm in
-    processCommand command $ parseArgs command rest
-    where
-        parseArgs c a = let
-            (args, rest) = breakEndTag a
-            closed = B8.last args == '/'
-            (content, rest') =  if  closed
-                                then ("", rest)
-                                else breakCloseTag c rest
-            in
-                (processArgs c args, content, if closed then B8.drop 1 rest' else dropCommand c rest')
-        processArgs com = toPairs com . Prelude.filter (not . B8.null) . B8.splitWith (\c -> c == ' ' || c == '=' || c == '"')
-        breakCommand = B8.break (== ' ') . B8.drop 7
-        breakEndTag = B8.break (== '>')
-        breakCloseTag c = B8.breakSubstring ("</hyper:" `B8.append` c `B8.append` ">") . B8.drop 1
-        dropCommand c = B8.drop $ 9 + B8.length c
-        toPairs _ [] = []
-        toPairs c [x] = error $ templateFile state ++ ": parse error in tag '" ++ B8.unpack c ++ "' attribute '" ++ B8.unpack x ++ "' has no value"
-        toPairs c  (k:v:r) = (k,v) : toPairs c r
-        processCommand c (args, content, rest) = do
-            let f = fromMaybe parseFail . M.lookup c $ commands state
-            state' <- f args content write state
-            processContents rest write state'
-            where
-                parseFail = error $ templateFile state ++ ": parse fail: templied called undefined command: '" ++ B8.unpack c ++ "'"
-
-applyTemplate :: FilePath -> TemplateState -> IO TemplateState
+applyTemplate :: FilePath -> TemplateState -> IO X.Document
 applyTemplate template state = do
     path <- findFile current'
---    B8.hPutStrLn stderr $ "about to read file: '" `B8.append` B8.pack path `B8.append` "'"
---    jason <- B8.getLine
---    B8.hPutStrLn stderr jason
-    c <- B8.readFile path
-    processContents c write $ state { templateFile = path, commands = M.insert "content" cc $ commands state }
+    doc <- X.readFile X.def $ fromString path
+    applyTemplate' doc state { templateFile = path }
     where
         findFile c = do
             let path = root state </> c </> template
-            exists <- doesFileExist $ path `debug` ("trying path: " ++ path)
+            exists <- doesFileExist path
             if exists then return path else findFile (upDir c)
         upDir "." = error $ "template file: " ++ template ++ " not found"
         upDir dir = takeDirectory . dropTrailingPathSeparator $ dir
@@ -113,48 +77,90 @@ applyTemplate template state = do
             if file == template
             then upDir dir
             else location state
-        write "" v = return v
-        write s v = do
-            B8.hPutStrLn stderr $ "writing to cache: '" `B8.append` s `B8.append` "'"
-            return v
-        cc _ _ w s@TemplateState { variables = v } = w (fromMaybe "NO CONTENT" $ M.lookup Content v) s 
+        makeDoc p e r = X.Document p r e
+        unwrap ([X.NodeElement e], _) = e
+        unwrap nodes = error $ "malformed document received: '" ++ show nodes ++ "' called in template: " ++ (show . templateFile) state
+        applyTemplate' (X.Document p r e) = fmap (makeDoc p e . unwrap) . processElement r
+
+-- TODO: Should we be looking at adding State monad in here instead of manually handling state?  It would mean a transformer I think
+processElement :: X.Element -> TemplateState -> IO ([X.Node], TemplateState)
+processElement (X.Element eName attrs children) state = do
+    (children', state') <- foldM pn ([], state) children
+    case eName of
+        (X.Name {nameLocalName = name, namePrefix = Just "hyper" }) -> dispatch name state' attrs children'
+        _                                                           -> return ([X.NodeElement $ X.Element eName attrs children'], state')
+    where
+        pn (cs, s) c = do
+            (cs', s') <- processNode c s
+            return (cs ++ cs', s')
+        dispatch name s = dispatch' name s s
+        dispatch' name = fromMaybe (failFun name) . M.lookup name . commands
+        failFun name = error $ "unknown command: " ++ show name ++ " called in template: " ++ (show . templateFile) state
+
+processNode :: X.Node -> TemplateState -> IO ([X.Node], TemplateState)
+processNode (X.NodeElement e) state = do
+    (es, state') <- processElement e state
+    return (es, state')              -- Maybe it should be up to the commands to return exactly the Node they want to return
+processNode c@(X.NodeContent _) s = return ([c], s)
+processNode c@(X.NodeComment _) s = return ([c], s)
+processNode (X.NodeInstruction _) s = return ([], s)
 
 -- commands
 
--- TODO: commands should actually be held in the state variable so that invoked commands can temporarily override them
--- TODO: commandApply should make a command "content" that applies what is in the Content variable (no other way to access it)
--- TODO: commandApply should clear the content variable as a first step.  However, in the case of a base call (template calling another of its same name) we should probably overwrite the content command to use the previous content.  In fact, maybe that's how it always works
--- TODO: In fact, if commandApply simply keeps the "content" command it receives and only overwrites it before returning state then we don't have to do this bookkeeping, everything should work as intended
-
-commandApply :: CommandArgs -> ByteString -> (ByteString -> TemplateState -> IO TemplateState) -> TemplateState -> IO TemplateState
-commandApply args content _ state@TemplateState { variables = vars, commands = comms } = do
-    let template = tryAttrLookup "apply" "template" args
-        pc = M.lookup Content $ vars
-    processContents content write state { variables = M.delete Content vars, commands = M.insert "content" (content' pc) comms } >>= applyTemplate (B8.unpack template)
-        where
-            write s st  = return $ st { variables = M.insertWith (flip B8.append) Content s . variables $ st } `debug` ("** SETTING content to be: '" ++ B8.unpack s ++ "'")
-            content' (Just pc) _ c w s = debug (w pc s) ("CONTENT WAS CALLED with content: '" ++ B8.unpack c ++ "' and prev: '" ++ B8.unpack pc ++ "'")
-            content' Nothing _ _ _ _ = error $ templateFile state ++ ": parse fail: uninitialized content used"
-
-commandLet :: CommandArgs -> ByteString -> (ByteString -> TemplateState -> IO TemplateState) -> TemplateState -> IO TemplateState
-commandLet args content _ state@TemplateState { variables = vars } = do
-    let name = tryAttrLookup "let" "name" args
-    state'@TemplateState {variables = vars'} <- processContents content write state { variables = M.delete Clipboard vars }
-    return $ state' { variables = M.insert (Var name) (content' vars') vars' } `debug` ("vars are " ++ show vars' ++ " after let")
+commandLet :: Command
+commandLet state@(TemplateState { variables = vars }) args children = commandLet' args'
     where
-        content' v = fromMaybe "" $ M.lookup Clipboard v
-        write s st = return $ st { variables = M.insertWith (flip B8.append) Clipboard s . variables $ st } `debug` ("++++ SETTING let with: '" ++ B8.unpack s ++ "'")
+        args' = parseAttrs parseArgs "" args
+        parseArgs name [] = name
+        parseArgs _ ((X.Name {nameLocalName = "name"}, n):rest) = parseArgs n rest
+        parseArgs _ ((X.Name {nameLocalName = attr}, _):_) = error $ "let command recieved invalid attribute: " ++ show attr ++ " in file " ++ (show . templateFile) state
+        commandLet' name = return ([], state { variables = M.insert (Var name) children vars })
 
-commandVar :: CommandArgs -> ByteString -> (ByteString -> TemplateState -> IO TemplateState) -> TemplateState -> IO TemplateState
-commandVar args _ write s = let
-    name    = tryAttrLookup "var" "name" args
-    value   = fromMaybe "" $ M.lookup (Var name) . variables $ s
-    in
-        write value s
-
--- helpers 
-
-tryAttrLookup :: String -> ByteString -> CommandArgs -> ByteString
-tryAttrLookup tag name args = fromMaybe parseFail . L.lookup name $ args
+commandApply :: Command
+commandApply state@(TemplateState { variables = vars }) args children = commandApply' args'
     where
-        parseFail = error $ "parse fail: " ++ tag ++ " missing required attribute: " ++ B8.unpack name
+        args' = parseAttrs parseArgs "" args
+        parseArgs template [] = T.unpack template
+        parseArgs _ ((X.Name {nameLocalName = "template"}, t):rest) = parseArgs t rest
+        parseArgs _ ((X.Name {nameLocalName = attr}, _):_) = error $ "apply command recieved invalid attribute: " ++ show attr ++ " in file " ++ (show . templateFile) state
+        wrapRoot (X.Document _ r _) = [X.NodeElement r]
+        commandApply' template = do
+            B8.hPutStr stderr . (B8.append "state: ") . B8.pack . show $ state
+            B8.hPutStrLn stderr . (B8.append ", children: ") . B8.pack . show $ children
+            doc <- applyTemplate template state { variables = M.insert Content children vars }
+            return (wrapRoot doc, state)
+
+commandVar :: Command
+commandVar state@(TemplateState { variables = vars }) args [] = commandVar' args'
+    where
+        args' = parseAttrs parseArgs ("", "false") args
+        parseArgs as [] = as
+        parseArgs (_,dw) ((X.Name {nameLocalName = "name"}, n):rest) = parseArgs (n,dw) rest
+        parseArgs (n,_) ((X.Name {nameLocalName = "div-wrap"}, dw):rest) = parseArgs (n,T.toLower dw) rest
+        parseArgs _ ((X.Name {nameLocalName = attr}, _):_) = error $ "var command recieved invalid attribute: " ++ show attr ++ " in file " ++ (show . templateFile) state
+        makeNode _ _ Nothing = []
+        makeNode "true" name (Just cs) = [X.NodeElement $ X.Element (X.Name "div" Nothing Nothing) (M.singleton "id" name) cs]
+        makeNode "false" _ (Just cs) = cs
+        makeNode val _ _ = error $ "var command, div-wrap attributed set with unexpected value: '" ++ show val ++ "' in file " ++ (show . templateFile) state
+        commandVar' (name, wrap) = return (makeNode wrap name $ M.lookup (Var name) vars, state)                                                      -- TODO: note, this will cause missing vars to simply return nothing instead of fail.  Is that ok?
+commandVar state _ children = error $ "var command malformed, unexpected children: '" ++ show children ++ "' in file " ++ (show . templateFile) state
+
+-- TODO: This command should probably accept the name to use as the div
+commandContent :: Command
+commandContent state@(TemplateState { variables = vars }) args [] = commandContent' args'
+    where
+        args' = parseAttrs parseArgs "false" args
+        parseArgs wrap [] = wrap
+        parseArgs _ ((X.Name {nameLocalName = "div-wrap"}, dw):rest) = parseArgs (T.toLower dw) rest
+        parseArgs _ ((X.Name {nameLocalName = attr}, _):_) = error $ "content command recieved invalid attribute: " ++ show attr ++ " in file " ++ (show . templateFile) state
+        makeNode _ Nothing = []
+        makeNode "true" (Just cs) = [X.NodeElement $ X.Element (X.Name "div" Nothing Nothing) (M.singleton "id" "content") cs]
+        makeNode "false" (Just cs) = cs
+        makeNode val _ = error $ "content command, div-wrap attributed set with unexpected value: '" ++ show val ++ "' in file " ++ (show . templateFile) state
+        commandContent' wrap = return (makeNode wrap $ M.lookup Content vars, state)
+commandContent state _ children = error $ "content command malformed, unexpected children: '" ++ show children ++ "' in file " ++ (show . templateFile) state
+
+-- helpers
+
+parseAttrs :: (a -> [(X.Name, Text)] -> b) -> a -> Map X.Name Text -> b
+parseAttrs p s = p s . M.toList

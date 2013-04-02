@@ -16,7 +16,9 @@ executable hyper-cms
                    parsec,
                    containers,
                    filepath,
-                   directory
+                   directory,
+                   xml-conduit,
+                   text
   ghc-options:     -Wall
   extensions:      OverloadedStrings
   other-modules:   
