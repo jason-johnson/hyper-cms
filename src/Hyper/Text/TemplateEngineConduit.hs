@@ -1,7 +1,7 @@
 module Hyper.Text.TemplateEngineConduit
 (
   applyTemplate
-, TemplateState(..)
+, defaultCommands
 )
 where
 
@@ -51,6 +51,12 @@ type CommandArgs = M.Map X.Name Text
 type Command = TemplateState -> CommandArgs -> [X.Node] -> IO (X.Element, TemplateState)
 type CommandMap = M.Map Text Command
 
+defaultCommands :: CommandMap
+defaultCommands = M.fromList [
+      ("let",   commandLet)
+    , ("apply", commandApply)
+    ]
+
 applyTemplate :: FilePath -> TemplateState -> IO TemplateState
 applyTemplate template state = do
     path <- findFile current'
@@ -98,3 +104,18 @@ processNode (X.NodeElement e) state = do
 processNode c@(X.NodeContent _) s = return (c, s)
 processNode c@(X.NodeComment _) s = return (c, s)
 processNode i@(X.NodeInstruction _) s = return (i, s)
+
+-- commands
+
+commandLet :: Command
+commandLet state@(TemplateState { variables = vars }) args nodes = do
+    commandLet' args'
+    where
+        args' = parseArgs "" . M.fromList $ args
+        parseArgs name [] = name
+        parseArgs _ (("name", n):rest) = parseArgs n rest
+        parseArgs _ ((attr, _):_) = error $ "let command recieved invalid attribute: " ++ attr ++ " in file " ++ (show . templateFile) state
+        commandLet' name = return (Nothing, state { variables = M.insert (Var name) nodes vars })
+
+commandApply :: Command
+commandApply _state _args _nodes = error "hi"
