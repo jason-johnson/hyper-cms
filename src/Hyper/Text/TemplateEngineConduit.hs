@@ -20,7 +20,7 @@ import Data.Text (Text)
 
 data Variable   = Content
                 | Clipboard
-                | Var ByteString
+                | Var Text
                 deriving (Eq, Ord, Show)
 type VariableMap = M.Map Variable [X.Node]
 
