@@ -22,7 +22,7 @@ data Variable   = Content
                 | Clipboard
                 | Var ByteString
                 deriving (Eq, Ord, Show)
-type VariableMap = M.Map Variable ByteString
+type VariableMap = M.Map Variable [X.Node]
 
 data TemplateState = TemplateState {
       root          :: String
@@ -48,7 +48,7 @@ instance Show (TemplateState) where
         ]
 
 type CommandArgs = M.Map X.Name Text
-type Command = CommandArgs -> [X.Node] -> TemplateState -> IO ([X.Node], TemplateState)
+type Command = TemplateState -> CommandArgs -> [X.Node] -> IO (X.Element, TemplateState)
 type CommandMap = M.Map Text Command
 
 applyTemplate :: FilePath -> TemplateState -> IO TemplateState
@@ -79,16 +79,16 @@ applyTemplate template state = do
 
 -- TODO: Should we be looking at adding State monad in here instead of manually handling state?  It would mean a transformer I think
 processElement :: X.Element -> TemplateState -> IO (X.Element, TemplateState)
-processElement (X.Element n@(X.Name {nameLocalName = name, namePrefix = Just "hyper" }) attrs children) state = do
+processElement (X.Element (X.Name {nameLocalName = name, namePrefix = Just "hyper" }) attrs children) state = do
     (children', state') <- foldM p ([], state) children
-    (ch', st') <- dispatch state' attrs children' state'    -- TODO: Actually this should be the last statement
-    return $ (X.Element n attrs (L.reverse ch'), st')
+    dispatch state' attrs $ L.reverse children'
     where
         p (cs, s) c = do
             (c', s') <- processNode c s
             return (c':cs, s')
-        dispatch = fromMaybe failFun . M.lookup name . commands
-        failFun _ _ _ = error $ "unknown command: " ++ show name ++ " called in template" 
+        dispatch s = dispatch' s s
+        dispatch' = fromMaybe failFun . M.lookup name . commands
+        failFun = error $ "unknown command: " ++ show name ++ " called in template: " ++ (show . templateFile) state
 processElement element state = return (element, state)
 
 processNode :: X.Node -> TemplateState -> IO (X.Node, TemplateState)
