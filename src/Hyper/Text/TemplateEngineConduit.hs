@@ -148,7 +148,7 @@ commandVar state@(TemplateState { variables = vars }) args [] = commandVar' args
         attrs "false" _ = mempty
         attrs "true" name = M.singleton "id" name
         attrs val _ = error $ "var command, div-wrap attributed set with unexpected value: '" ++ show val ++ "' in file " ++ (show . templateFile) state
-        commandVar' (name, wrap) = return (fmap (makeDiv wrap name) $ M.lookup (Var name) vars, state)
+        commandVar' (name, wrap) = return (fmap (makeDiv wrap name) $ M.lookup (Var name) vars, state)                                                      -- TODO: note, this will cause missing vars to simply return nothing instead of fail.  Is that ok?
 commandVar state _ children = error $ "var command malformed, unexpected children: '" ++ show children ++ "' in file " ++ (show . templateFile) state
 
 commandContent :: Command
