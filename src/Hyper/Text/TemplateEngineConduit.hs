@@ -117,10 +117,18 @@ commandLet state@(TemplateState { variables = vars }) args children = commandLet
         commandLet' name = return (Nothing, state { variables = M.insert (Var name) children vars })
 
 commandApply :: Command
-commandApply state _args children = do
-    B8.hPutStr stderr . (B8.append "state: ") . B8.pack . show $ state
-    B8.hPutStrLn stderr . (B8.append ", children: ") . B8.pack . show $ children
-    error "commandApply not yet implemented"
+commandApply state@(TemplateState { variables = vars }) args children = commandApply' args'
+    where
+        args' = parseAttrs parseArgs "" args
+        parseArgs template [] = T.unpack template
+        parseArgs _ ((X.Name {nameLocalName = "template"}, t):rest) = parseArgs t rest
+        parseArgs _ ((X.Name {nameLocalName = attr}, _):_) = error $ "apply command recieved invalid attribute: " ++ show attr ++ " in file " ++ (show . templateFile) state
+        getRoot (X.Document _ r _) = r
+        commandApply' template = do
+            B8.hPutStr stderr . (B8.append "state: ") . B8.pack . show $ state
+            B8.hPutStrLn stderr . (B8.append ", children: ") . B8.pack . show $ children
+            doc <- applyTemplate template state { variables = M.insert Content children vars }
+            return (fmap getRoot doc, state)
 
 -- helpers
 
