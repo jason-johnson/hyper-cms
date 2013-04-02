@@ -64,12 +64,8 @@ defaultCommands = M.fromList [
 applyTemplate :: FilePath -> TemplateState -> IO (Maybe X.Document)
 applyTemplate template state = do
     path <- findFile current'
---    B8.hPutStrLn stderr $ "about to read file: '" `B8.append` B8.pack path `B8.append` "'"
---    jason <- B8.getLine
---    B8.hPutStrLn stderr jason
     doc <- X.readFile X.def $ fromString path
     applyTemplate' doc state { templateFile = path }
-    -- X.writeFile X.def { X.rsPretty = True } "output.html" $ X.Document prologue rootE epilogue
     where
         findFile c = do
             let path = root state </> c </> template
