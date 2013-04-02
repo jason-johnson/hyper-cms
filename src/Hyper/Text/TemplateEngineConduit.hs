@@ -61,7 +61,7 @@ defaultCommands = M.fromList [
     , ("content", commandContent)
     ]
 
-applyTemplate :: FilePath -> TemplateState -> IO (Maybe X.Document)
+applyTemplate :: FilePath -> TemplateState -> IO X.Document
 applyTemplate template state = do
     path <- findFile current'
     doc <- X.readFile X.def $ fromString path
@@ -78,10 +78,9 @@ applyTemplate template state = do
             then upDir dir
             else location state
         makeDoc p e r = X.Document p r e
-        maybeDoc p e = fmap $ makeDoc p e
-        unwrap ([X.NodeElement e], _) = Just e
+        unwrap ([X.NodeElement e], _) = e
         unwrap nodes = error $ "malformed document received: '" ++ show nodes ++ "' called in template: " ++ (show . templateFile) state
-        applyTemplate' (X.Document p r e) = fmap (maybeDoc p e . unwrap) . processElement r
+        applyTemplate' (X.Document p r e) = fmap (makeDoc p e . unwrap) . processElement r
 
 -- TODO: Should we be looking at adding State monad in here instead of manually handling state?  It would mean a transformer I think
 processElement :: X.Element -> TemplateState -> IO ([X.Node], TemplateState)
@@ -124,13 +123,12 @@ commandApply state@(TemplateState { variables = vars }) args children = commandA
         parseArgs template [] = T.unpack template
         parseArgs _ ((X.Name {nameLocalName = "template"}, t):rest) = parseArgs t rest
         parseArgs _ ((X.Name {nameLocalName = attr}, _):_) = error $ "apply command recieved invalid attribute: " ++ show attr ++ " in file " ++ (show . templateFile) state
-        getRoot (Just (X.Document _ r _)) = [X.NodeElement r]
-        getRoot Nothing = []
+        wrapRoot (X.Document _ r _) = [X.NodeElement r]
         commandApply' template = do
             B8.hPutStr stderr . (B8.append "state: ") . B8.pack . show $ state
             B8.hPutStrLn stderr . (B8.append ", children: ") . B8.pack . show $ children
             doc <- applyTemplate template state { variables = M.insert Content children vars }
-            return (getRoot doc, state)
+            return (wrapRoot doc, state)
 
 commandVar :: Command
 commandVar state@(TemplateState { variables = vars }) args [] = commandVar' args'
