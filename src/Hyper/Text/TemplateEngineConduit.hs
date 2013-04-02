@@ -57,20 +57,15 @@ defaultCommands = M.fromList [
     , ("apply", commandApply)
     ]
 
-applyTemplate :: FilePath -> TemplateState -> IO TemplateState
+applyTemplate :: FilePath -> TemplateState -> IO (Maybe X.Document)
 applyTemplate template state = do
     path <- findFile current'
 --    B8.hPutStrLn stderr $ "about to read file: '" `B8.append` B8.pack path `B8.append` "'"
 --    jason <- B8.getLine
 --    B8.hPutStrLn stderr jason
-    X.Document prologue rootE epilogue <- X.readFile X.def $ fromString path
-    B8.hPutStrLn stderr . (B8.append "prologue: ") . B8.pack . show $ prologue
-    B8.hPutStrLn stderr . (B8.append "epilogue: ") . B8.pack . show $ epilogue
-    B8.hPutStrLn stderr . (B8.append "root: ") . B8.pack . show $ rootE
+    doc <- X.readFile X.def $ fromString path
+    applyTemplate' doc state { templateFile = path }
     -- X.writeFile X.def { X.rsPretty = True } "output.html" $ X.Document prologue rootE epilogue
-    rootE' <- processElement rootE state { templateFile = path }
-    B8.hPutStrLn stderr . (B8.append "root': ") . B8.pack . show $ rootE'
-    return state
     where
         findFile c = do
             let path = root state </> c </> template
@@ -82,6 +77,9 @@ applyTemplate template state = do
             if file == template
             then upDir dir
             else location state
+        makeDoc p e r = X.Document p r e
+        maybeDoc p e = fmap (makeDoc p e) . fst
+        applyTemplate' (X.Document p r e) = fmap (maybeDoc p e) . processElement r
 
 -- TODO: Should we be looking at adding State monad in here instead of manually handling state?  It would mean a transformer I think
 processElement :: X.Element -> TemplateState -> IO (Maybe X.Element, TemplateState)
