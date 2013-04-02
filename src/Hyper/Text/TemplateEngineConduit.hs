@@ -17,6 +17,8 @@ import Text.XML (nameLocalName, namePrefix)
 import Data.String (fromString)
 import Control.Monad (foldM)
 import Data.Text (Text)
+import qualified Data.Text as T
+import Data.Monoid (mempty)
 
 data Variable   = Content
                 | Clipboard
@@ -55,6 +57,7 @@ defaultCommands :: CommandMap
 defaultCommands = M.fromList [
       ("let",   commandLet)
     , ("apply", commandApply)
+    , ("var", commandVar)
     ]
 
 applyTemplate :: FilePath -> TemplateState -> IO (Maybe X.Document)
@@ -129,6 +132,21 @@ commandApply state@(TemplateState { variables = vars }) args children = commandA
             B8.hPutStrLn stderr . (B8.append ", children: ") . B8.pack . show $ children
             doc <- applyTemplate template state { variables = M.insert Content children vars }
             return (fmap getRoot doc, state)
+
+commandVar :: Command
+commandVar state@(TemplateState { variables = vars }) args [] = commandVar' args'
+    where
+        args' = parseAttrs parseArgs ("", "false") args
+        parseArgs as [] = as
+        parseArgs (_,dw) ((X.Name {nameLocalName = "name"}, n):rest) = parseArgs (n,dw) rest
+        parseArgs (n,_) ((X.Name {nameLocalName = "div-wrap"}, dw):rest) = parseArgs (n,T.toLower dw) rest
+        parseArgs _ ((X.Name {nameLocalName = attr}, _):_) = error $ "var command recieved invalid attribute: " ++ show attr ++ " in file " ++ (show . templateFile) state
+        makeDiv wrap name cs = X.Element (X.Name "div" Nothing Nothing) (attrs wrap name) cs
+        attrs "false" _ = mempty
+        attrs "true" name = M.singleton "id" name
+        attrs val _ = error $ "var command, div-wrap attributed set with unexpected value: '" ++ show val ++ "' in file " ++ (show . templateFile) state
+        commandVar' (name, wrap) = return (fmap (makeDiv wrap name) $ M.lookup (Var name) vars, state)
+commandVar state _ children = error $ "var command malformed, unexpected children: '" ++ show children ++ "' in file " ++ (show . templateFile) state
 
 -- helpers
 
