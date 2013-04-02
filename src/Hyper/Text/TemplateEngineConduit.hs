@@ -108,8 +108,7 @@ processNode (X.NodeInstruction _) s = return (Nothing, s)
 -- commands
 
 commandLet :: Command
-commandLet state@(TemplateState { variables = vars }) args children = do
-    commandLet' args'
+commandLet state@(TemplateState { variables = vars }) args children = commandLet' args'
     where
         args' = parseAttrs parseArgs "" args
         parseArgs name [] = name
