@@ -84,10 +84,10 @@ applyTemplate template state = do
 -- TODO: Should we be looking at adding State monad in here instead of manually handling state?  It would mean a transformer I think
 processElement :: X.Element -> TemplateState -> IO (Maybe X.Element, TemplateState)
 processElement (X.Element (X.Name {nameLocalName = name, namePrefix = Just "hyper" }) attrs children) state = do
-    (children', state') <- foldM p ([], state) children
+    (children', state') <- foldM pn ([], state) children
     dispatch state' attrs $ L.reverse children'
     where
-        p (cs, s) c = do
+        pn (cs, s) c = do
             (c', s') <- processNode c s
             return (consMaybe c' cs, s')
         dispatch s = dispatch' s s
