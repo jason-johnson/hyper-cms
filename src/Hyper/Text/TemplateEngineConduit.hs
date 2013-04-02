@@ -48,7 +48,7 @@ instance Show (TemplateState) where
         ]
 
 type CommandArgs = M.Map X.Name Text
-type Command = TemplateState -> CommandArgs -> [X.Node] -> IO (X.Element, TemplateState)
+type Command = TemplateState -> CommandArgs -> [X.Node] -> IO (Maybe X.Element, TemplateState)
 type CommandMap = M.Map Text Command
 
 defaultCommands :: CommandMap
@@ -84,26 +84,28 @@ applyTemplate template state = do
             else location state
 
 -- TODO: Should we be looking at adding State monad in here instead of manually handling state?  It would mean a transformer I think
-processElement :: X.Element -> TemplateState -> IO (X.Element, TemplateState)
+processElement :: X.Element -> TemplateState -> IO (Maybe X.Element, TemplateState)
 processElement (X.Element (X.Name {nameLocalName = name, namePrefix = Just "hyper" }) attrs children) state = do
     (children', state') <- foldM p ([], state) children
     dispatch state' attrs $ L.reverse children'
     where
         p (cs, s) c = do
             (c', s') <- processNode c s
-            return (c':cs, s')
+            return (consMaybe c' cs, s')
         dispatch s = dispatch' s s
         dispatch' = fromMaybe failFun . M.lookup name . commands
         failFun = error $ "unknown command: " ++ show name ++ " called in template: " ++ (show . templateFile) state
-processElement element state = return (element, state)
+        consMaybe (Just c) cs = c : cs
+        consMaybe Nothing cs = cs
+processElement element state = return (Just element, state)
 
-processNode :: X.Node -> TemplateState -> IO (X.Node, TemplateState)
+processNode :: X.Node -> TemplateState -> IO (Maybe X.Node, TemplateState)
 processNode (X.NodeElement e) state = do
     (e', state') <- processElement e state
-    return (X.NodeElement e', state')
-processNode c@(X.NodeContent _) s = return (c, s)
-processNode c@(X.NodeComment _) s = return (c, s)
-processNode i@(X.NodeInstruction _) s = return (i, s)
+    return (fmap X.NodeElement e', state')
+processNode c@(X.NodeContent _) s = return (Just c, s)
+processNode c@(X.NodeComment _) s = return (Just c, s)
+processNode (X.NodeInstruction _) s = return (Nothing, s)
 
 -- commands
 
@@ -111,11 +113,14 @@ commandLet :: Command
 commandLet state@(TemplateState { variables = vars }) args nodes = do
     commandLet' args'
     where
-        args' = parseArgs "" . M.fromList $ args
+        args' = parseArgs "" . M.toList $ args
         parseArgs name [] = name
-        parseArgs _ (("name", n):rest) = parseArgs n rest
-        parseArgs _ ((attr, _):_) = error $ "let command recieved invalid attribute: " ++ attr ++ " in file " ++ (show . templateFile) state
+        parseArgs _ ((X.Name {nameLocalName = "name"}, n):rest) = parseArgs n rest
+        parseArgs _ ((X.Name {nameLocalName = attr}, _):_) = error $ "let command recieved invalid attribute: " ++ show attr ++ " in file " ++ (show . templateFile) state
         commandLet' name = return (Nothing, state { variables = M.insert (Var name) nodes vars })
 
 commandApply :: Command
-commandApply _state _args _nodes = error "hi"
+commandApply state _args children = do
+    B8.hPutStr stderr . (B8.append "state: ") . B8.pack . show $ state
+    B8.hPutStrLn stderr . (B8.append ", children: ") . B8.pack . show $ children
+    error "commandApply not yet implemented"
