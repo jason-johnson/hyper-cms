@@ -10,3 +10,4 @@ cabal-dev
 .settings/
 sites/
 hyper-cms.config
+.DS_Store
