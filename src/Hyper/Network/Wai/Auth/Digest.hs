@@ -1,4 +1,4 @@
-module Hyper.Network.Wait.Auth.Digest
+module Hyper.Network.Wai.Auth.Digest
 (
 )
 where
