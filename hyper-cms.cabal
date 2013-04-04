@@ -28,5 +28,10 @@ executable hyper-cms
                    Hyper.Config.File.Parser,
                    Hyper.Config.Types,
                    Hyper.Constants,
-                   Hyper.Options
+                   Hyper.Network.Wai.Auth.Digest,
+                   Hyper.Network.Wai.Handler,
+                   Hyper.Network.Wai.Handler.Multi,
+                   Hyper.Network.Wai.Handler.Single,
+                   Hyper.Options,
+                   Hyper.Text.TemplateEngine
 
